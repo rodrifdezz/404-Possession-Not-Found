@@ -1,2 +1,28 @@
-# 404-Possession-Not-Found
-Computer vision and spatio-temporal tracking pipeline for player detection, ball tracking, and ball possession estimation in football matches. Barça Sports Analytics Hackathon project.
+# 404 Possession Not Found ⚽📊
+
+Proyecto desarrollado para el **Barça Sports Analytics Hackathon (More Than a Hack)**.
+
+## 🎯 Objetivo - Reto 1 (17 Nov)
+Desarrollo de un pipeline algorítmico en Python para la detección y estimación de la posesión del balón en cada instante de partido a partir de datos reales de juego y tracking.
+
+## 👥 Integrantes
+* Rodrigo Fernández Moro
+* Jorge Arce Nicolás
+* Alberto Rivas Casal
+* Nombre
+
+## 🛠️ Stack Tecnológico
+* **Lenguaje:** Python 3.10+
+* **Procesamiento de Datos:** Pandas, NumPy
+* **Visión por Computador:** OpenCV, Ultralytics (YOLO)
+* **Modelado & Métricas:** Scikit-Learn, PyTorch
+
+## 📁 Estructura del Proyecto
+├── data/              # Datos locales (no versionados en git)
+├── notebooks/         # Exploración de datos y prototipado
+├── src/               # Código fuente del algoritmo
+│   ├── detection/     # Módulos de detección y tracking
+│   ├── possession/    # Lógica de asignación de posesión
+│   └── utils/         # Funciones auxiliares
+├── requirements.txt   # Dependencias del proyecto
+└── README.md
