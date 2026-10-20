@@ -9,7 +9,7 @@ Desarrollo de un pipeline algorítmico en Python para la detección y estimació
 * Rodrigo Fernández Moro
 * Jorge Arce Nicolás
 * Alberto Rivas Casal
-* Nombre
+* Gonzalo Fernández González
 
 ## 🛠️ Stack Tecnológico
 * **Lenguaje:** Python 3.10+
