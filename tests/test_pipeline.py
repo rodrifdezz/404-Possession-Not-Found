@@ -3,7 +3,7 @@
     python -m unittest discover -s tests -v
 
 Nada de datos reales. El partido falso lo genera tools/make_fake_data.py, reducido a N_FRAMES
-fotogramas cambiando solo las constantes de config (N_FRAMES, HALVES, KNOWN_DEAD) mientras dura
+fotogramas cambiando solo las constantes de config (N_FRAMES, HALVES) mientras dura
 la prueba; PARAMS y el algoritmo no se tocan. Datos, caché y salidas van a una carpeta temporal,
 así que data/, cache/ y outputs/ del repo no se usan.
 
@@ -30,7 +30,6 @@ from src import make_submission
 
 N_FRAMES = 4000
 HALVES = [(250, 1850), (2150, 3750)]
-KNOWN_DEAD = [(2150, 2399)]
 VALIDATOR = os.path.join(C.OFFICIAL_REPO, "evaluation", "validate_submission.py")
 
 
@@ -50,7 +49,6 @@ class PipelineTest(unittest.TestCase):
         data_dir = os.path.join(cls.tmp, "fake_data")
         patches = [mock.patch.object(C, "N_FRAMES", N_FRAMES),
                    mock.patch.object(C, "HALVES", HALVES),
-                   mock.patch.object(C, "KNOWN_DEAD", KNOWN_DEAD),
                    mock.patch.object(C, "DATA_DIR", data_dir),
                    mock.patch.object(C, "CACHE_DIR", os.path.join(cls.tmp, "cache")),
                    mock.patch.object(C, "OUT_DIR", os.path.join(cls.tmp, "outputs")),
@@ -60,8 +58,8 @@ class PipelineTest(unittest.TestCase):
             for p in patches:
                 stack.enter_context(p)
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
-            fake = load_fake_data_tool()
-            fake.write(data_dir, *fake.simulate(np.random.default_rng(0)))
+            cls.fake = load_fake_data_tool()
+            cls.fake.write(data_dir, *cls.fake.simulate(np.random.default_rng(0)))
             cls.path = make_submission.run("pipeline_test")
 
     @classmethod
@@ -85,6 +83,15 @@ class PipelineTest(unittest.TestCase):
             graded[a:b + 1] = True
         labels = np.array(labels)
         self.assertEqual(set(labels[~graded]), {"X"})
+
+    def test_d_antes_del_saque_sin_tramos_fijos(self):
+        # El simulador empieza la 2ª parte con PRE_KICKOFF_S de balón muerto. No hay ninguna
+        # regla atada a fotogramas concretos: la D tiene que salir de las evidencias.
+        with open(self.path, newline="") as fh:
+            labels = np.array([l for _, l in list(csv.reader(fh))[1:]])
+        a = HALVES[1][0]
+        pre_kickoff = labels[a:a + int(self.fake.PRE_KICKOFF_S * C.FPS)]
+        self.assertGreaterEqual(np.mean(pre_kickoff == "D"), 0.9)
 
     @unittest.skipUnless(os.path.isfile(VALIDATOR), "no está el repo oficial (MTAH_REPO)")
     def test_validador_oficial(self):
