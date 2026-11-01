@@ -45,12 +45,17 @@ def write_csv(labels, path):
         fh.writelines("{},{}\n".format(i, l) for i, l in enumerate(labels))
 
 
+class ValidationError(Exception):
+    """El validador oficial ha rechazado el CSV."""
+
+
 def validate(path):
     script = os.path.join(C.OFFICIAL_REPO, "evaluation", "validate_submission.py")
     if not os.path.isfile(script):
         print("(no encuentro el validador oficial en {}; revisa MTAH_REPO)".format(script))
         return
-    subprocess.run([sys.executable, script, path], check=False)
+    if subprocess.run([sys.executable, script, path]).returncode != 0:
+        raise ValidationError("el validador oficial rechaza {}".format(path))
 
 
 def run(name):
@@ -70,4 +75,7 @@ def run(name):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--name", default=C.TEAM_NAME)
-    run(ap.parse_args().name)
+    try:
+        run(ap.parse_args().name)
+    except ValidationError as error:
+        sys.exit("ERROR: {}".format(error))

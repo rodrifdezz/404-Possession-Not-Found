@@ -52,8 +52,4 @@ def dead_logit(f, tags, p=C.PARAMS):
     for t in tags:
         if t["code"] == "SET PIECES":
             z[max(t["start"], 0):max(t["end"] - tail, 0)] += 1.0
-
-    # 6) tramos conocidos
-    for a, b in C.KNOWN_DEAD:
-        z[a:b + 1] += 20.0
     return z

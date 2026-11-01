@@ -22,6 +22,7 @@ from src import config as C  # noqa: E402
 
 L, W = C.PITCH
 N_SLOTS = 46
+PRE_KICKOFF_S = 10.0   # tramo D simulado al empezar la 2ª parte, antes del saque
 
 
 def simulate(rng):
@@ -45,8 +46,8 @@ def simulate(rng):
         f = a
         state_team = 1 if h == 0 else -1
         if h == 1:   # tramo D antes del saque de la 2ª parte
-            ka, kb = C.KNOWN_DEAD[0]
-            for t in range(ka, kb + 1):
+            kb = a + int(PRE_KICKOFF_S * C.FPS) - 1
+            for t in range(a, kb + 1):
                 noise += rng.normal(0, 0.03, noise.shape)
                 pos[t, slot_of] = base + noise
                 ball[t] = (L / 2, W / 2)

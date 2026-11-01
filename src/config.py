@@ -26,7 +26,6 @@ N_FRAMES = 199319
 FPS = 25
 PITCH = (105.3, 68.0)                         # metros (largo, ancho)
 HALVES = [(11185, 90651), (110808, 190197)]   # fotogramas puntuados, inclusivos
-KNOWN_DEAD = [(110808, 113741)]               # 2ª parte puntuada antes del saque: todo D
 
 
 def asset(name):
