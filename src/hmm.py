@@ -12,14 +12,24 @@ from . import config as C
 H, A, D = 0, 1, 2
 
 
+def log_sigmoid(z):
+    """log(1 / (1 + e^-z)) sin desbordar para |z| grande."""
+    return -np.logaddexp(0.0, -z)
+
+
 def emissions(team_llr, dead_logit):
-    """(N,3) log-puntuaciones. log p(D) / log p(vivo) a partir del logit de muerto."""
-    log_dead = -np.logaddexp(0.0, -dead_logit)
-    log_alive = -np.logaddexp(0.0, dead_logit)
+    """(N,3) log-probabilidades; en cada fotograma p(H) + p(A) + p(D) = 1.
+
+        p(D) = sigmoid(dead_logit)
+        p(H) = p(vivo) * sigmoid(team_llr)      p(A) = p(vivo) * sigmoid(-team_llr)
+
+    La evidencia de equipo solo reparte p(vivo) entre H y A; no puede restar peso a D.
+    """
+    log_alive = log_sigmoid(-dead_logit)
     e = np.empty((len(team_llr), 3))
-    e[:, H] = log_alive + team_llr / 2.0
-    e[:, A] = log_alive - team_llr / 2.0
-    e[:, D] = log_dead
+    e[:, H] = log_alive + log_sigmoid(team_llr)
+    e[:, A] = log_alive + log_sigmoid(-team_llr)
+    e[:, D] = log_sigmoid(dead_logit)
     return e
 
 
