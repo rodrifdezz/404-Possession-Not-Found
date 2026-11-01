@@ -11,12 +11,13 @@ For every frame of the tactical video we output `H` (home in possession), `A` (a
 | step | file | what it does |
 |---|---|---|
 | 1. ball cleaning | `src/ball.py` | linear interpolation of short ball gaps, ball speed |
-| 2. dead ball | `src/dead.py` | per-frame log-odds of a stoppage: ball off the pitch, players walking, ball still, long ball loss, Smart Tagging set pieces, known pre-kickoff stretch |
+| 2. dead ball | `src/dead.py` | per-frame log-odds of a stoppage: ball off the pitch, players walking, ball still, long ball loss, Smart Tagging set pieces |
 | 3. team in control | `src/team.py` | per-frame log-ratio home vs away: nearest-player distance advantage, damped while the ball is in flight, weak Smart Tagging prior |
-| 4. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs, decoded per half |
+| 4. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs, decoded per half; emissions are normalised probabilities, p(H) = p(alive)·p(H\|alive) |
 
 Parameters live in `src/config.py` and are set from physical reasoning, not tuned on the public
-ground truth. No hand annotation of the provided match is used anywhere.
+ground truth. No hand annotation of the provided match is used anywhere, and no rule or constant
+is tied to specific frames of the match.
 
 ## Reproduce
 
@@ -34,7 +35,10 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m src.make_submission        # -> outputs/404-possession-not-found.csv (validated)
 python -m src.evaluate               # official scorer, public 5-minute window
+python -m unittest discover -s tests -v
 ```
+
+`make_submission` exits with an error if the official validator rejects the CSV.
 
 Different locations: `MTAH_REPO=/path/to/official/repo` and/or `MTAH_DATA_DIR=/path/to/data`.
 
