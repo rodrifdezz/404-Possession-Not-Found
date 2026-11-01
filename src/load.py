@@ -1,12 +1,13 @@
 """Lectura del tracking (ATD) y del Smart Tagging a arrays de numpy.
 
-El ATD se lee una vez (~1-2 min) y se guarda en cache/atd.npz; las siguientes veces carga en
-segundos. cache/ está en .gitignore: son datos derivados del partido y NO se pueden publicar.
+El ATD se lee una vez (~1-2 min) y se guarda en cache/atd_<huella>.npz; las siguientes veces carga
+en segundos. cache/ está en .gitignore: son datos derivados del partido y NO se pueden publicar.
 
 Formato de cada línea del ATD:  <frame_id>:<x,y,s>;<x,y,s>;...(46 slots):<x,y,...balón>
 frame_id empieza en 1; el fotograma de vídeo (fila del CSV) es frame_id - 1.
 """
 
+import hashlib
 import os
 import xml.etree.ElementTree as ET
 
@@ -47,14 +48,24 @@ def _parse_raw(raw_path, n_slots):
     return players * scale, ball * scale
 
 
+def _cache_path(*sources):
+    """cache/atd_<huella>.npz: la huella cambia con la ruta, el tamaño o la fecha de cada fichero,
+    así que otro dataset (p. ej. fake_data/) o un fichero modificado no reutilizan caché ajena."""
+    key = hashlib.sha1()
+    for p in sources:
+        st = os.stat(p)
+        key.update("{}|{}|{}\n".format(os.path.abspath(p), st.st_size, st.st_mtime_ns).encode())
+    return os.path.join(C.CACHE_DIR, "atd_{}.npz".format(key.hexdigest()[:16]))
+
+
 def load_atd(use_cache=True):
     """dict con players (N,46,2) m, ball (N,2) m, team (46,) +1/-1. NaN = no visto."""
-    cache = os.path.join(C.CACHE_DIR, "atd.npz")
     meta, raw = C.asset("atd_meta"), C.asset("atd_raw")
     for p in (meta, raw):
         if not os.path.isfile(p):
             raise FileNotFoundError("No encuentro {}. Revisa MTAH_DATA_DIR / MTAH_REPO.".format(p))
-    if use_cache and os.path.isfile(cache) and os.path.getmtime(cache) > os.path.getmtime(raw):
+    cache = _cache_path(meta, raw)
+    if use_cache and os.path.isfile(cache):
         z = np.load(cache)
         return {k: z[k] for k in z.files}
     team = track_teams(meta)
