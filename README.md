@@ -13,7 +13,7 @@ For every frame of the tactical video we output `H` (home in possession), `A` (a
 | 1. ball cleaning | `src/ball.py` | linear interpolation of short ball gaps, ball speed |
 | 2. dead ball | `src/dead.py` | per-frame log-odds of a stoppage: ball off the pitch, players walking, ball still, long ball loss, Smart Tagging set pieces |
 | 3. team in control | `src/team.py` | per-frame log-ratio home vs away: nearest-player distance advantage, damped while the ball is in flight, weak Smart Tagging prior |
-| 4. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs, decoded per half; emissions are normalised probabilities, p(H) = p(alive)·p(H\|alive), tempered so that consecutive frames are not counted as independent evidence |
+| 4. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs, decoded per half; emissions are normalised probabilities, p(H) = p(alive)·p(H\|alive); the two costs are chosen on the external bench |
 
 Parameters live in `src/config.py`. They are set from physical reasoning or chosen on an external
 bench of other matches (below), never tuned on the public ground truth. No hand annotation of the provided match is used anywhere, and no rule or constant
@@ -44,7 +44,7 @@ Different locations: `MTAH_REPO=/path/to/official/repo` and/or `MTAH_DATA_DIR=/p
 
 ## External bench (how decoder parameters are chosen)
 
-The emission temperature and the switching costs are chosen on **other matches only**: the seven
+The two switching costs of the decoder are chosen on **other matches only**: the seven
 open IDSSE / DFL Bundesliga games (Bassek et al., *Scientific Data* 12, 195, 2025, CC BY 4.0),
 whose per-frame `BallStatus` / `BallPossession` flags are the same kind of tracking flags the
 challenge ground truth is derived from. Each game is degraded to resemble the provided automatic

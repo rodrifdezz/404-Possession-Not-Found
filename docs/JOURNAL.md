@@ -24,7 +24,7 @@ One entry per change. Date · who · what · why · effect on the full match
 - Decision: kept (fixes a model error and a rule violation). Watch the 47% D on the full match:
   it looks high. (Update 2026-11-13: it is not; real matches have 41-52 % D.)
 
-## 2026-11-13 · JAN · external bench + temperature (branch JAN_banco_externo)
+## 2026-11-13 · JAN · external bench + temperature (branch JAN_banco_externo, PR 1)
 - Diagnosis: with a player < 2 m from the ball, `team_llr` gives up to 3 nats per frame, while
   switching possession and back costs 2 × 8 = 16 nats. ~6 frames (0.24 s) of an opponent near the
   ball are enough to create a fake possession. That is why the full match has 516 possessions
@@ -46,5 +46,26 @@ One entry per change. Date · who · what · why · effect on the full match
 - The repo was normalised to English (code, comments, tests, docs).
 - Note: `outputs/404-possession-not-found.csv` was v0 (md5 05a2ecc7…). It must be regenerated
   before submitting.
-- To do: run `python -m bench.run`, copy the chosen parameters into `config.py` and log here the
-  effect on the full match.
+
+## 2026-11-13 · JAN · v2: decoder costs chosen on the external bench
+- First bench run (125 configs: temperature × switch × dead). Two lessons:
+  1. The temperature adds nothing: dividing the emissions by τ is exactly the same as multiplying
+     both costs by τ (the two best configs, τ 1 / 8 / 48 and τ 3 / 4 / 12, are one model). The
+     diagnosis above was half right: the evidence is over-counted, but the cure is just the costs.
+     `emission_temper` was removed.
+  2. What matters is `dead_cost`: the fragmentation came mostly from short fake stoppages (live →
+     D → live) splitting possessions, not from H↔A flicker. The best `dead_cost` (48) was at the
+     edge of that grid.
+- Second run with a wider grid (switch 4-24 × dead 6-384, 42 configs): the optimum is interior
+  (dead 48 beats 96). Chosen on all 7 matches: **switch 12, dead 48** (tied at 3 decimals with
+  switch 8 · dead 48; the bench's choice was applied as is, not picked by hand).
+- Leave-one-match-out spellF1: v1 0.261 → **0.294**, better on every one of the 7 held-out
+  matches (+0.011 to +0.050). Predicted possessions per external match: 511 → 273 (truth: 380).
+  Details: `docs/BENCH.md`.
+- Effect on the full challenge match: possessions 516 → **333** (3.1/min), mean duration
+  6.5 → **10.0 s**, median 6.5 s, D 47.4 % → 47.7 %. Valid; md5 98fdf1aa… identical on two runs.
+- Not looked at: the public 5 minutes (not used to choose or confirm anything).
+- Decision: kept.
+- Limit: the absolute bench level is low (~0.29). Tuning the decoder is done; the remaining margin
+  is in the evidence (`dead.py`, `team.py`), especially dead-ball detection. Any new rule must be
+  validated on the bench before being kept.

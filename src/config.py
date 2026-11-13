@@ -59,11 +59,10 @@ PARAMS = {
     "long_gap_s": 2.0,
     "set_piece_tail_s": 1.5,        # a set-piece tag ends ~1.5 s after the actual restart
     # temporal model (in nats; cost of changing state)
-    # These three are chosen on the external bench (python -m bench.run, see docs/BENCH.md),
-    # never on the challenge match. Until they are updated they keep their v1 values.
-    "emission_temper": 1.0,         # frames per independent observation (see hmm.py)
-    "switch_cost": 8.0,             # H <-> A
-    "dead_cost": 6.0,               # alive <-> D
+    # Both are chosen on the external bench (python -m bench.run, see docs/BENCH.md), never on
+    # the challenge match.
+    "switch_cost": 12.0,            # H <-> A          (v1: 8)
+    "dead_cost": 48.0,              # alive <-> D      (v1: 6)
 }
 
 # Smart Tagging phases whose 'Team' is the team IN possession (hypothesis to check visually on

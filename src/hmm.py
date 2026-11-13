@@ -4,12 +4,8 @@ States 0=H, 1=A, 2=D. Each frame contributes a score per state (emissions, in lo
 state has a cost (switch_cost between H and A, dead_cost between alive and dead). Viterbi finds
 the sequence with the best total score: few possessions, with changes in the right place.
 
-Temperature (emission_temper, in frames). At 25 fps consecutive frames are not independent
-observations: a player next to the ball for 0.2 s is ONE clue, not five. Without correcting for
-this the evidence is counted ~25 times per second, and a few frames of an opponent near the ball
-are enough to pay for a change of possession and its way back. Dividing the log emissions by the
-temperature amounts to counting one independent observation every `emission_temper` frames.
-With temperature 1 the model is exactly v1.
+The costs are chosen on the external bench (bench/run.py, docs/BENCH.md). Scaling the emissions
+by a constant ("temperature") would add nothing: it is the same as scaling both costs.
 """
 
 import numpy as np
@@ -24,10 +20,9 @@ def log_sigmoid(z):
     return -np.logaddexp(0.0, -z)
 
 
-def emissions(team_llr, dead_logit, temper=1.0):
-    """(N,3) log-probabilities divided by `temper`.
+def emissions(team_llr, dead_logit):
+    """(N,3) log-probabilities; on every frame p(H) + p(A) + p(D) = 1:
 
-    Before dividing, p(H) + p(A) + p(D) = 1 on every frame:
         p(D) = sigmoid(dead_logit)
         p(H) = p(alive) * sigmoid(team_llr)      p(A) = p(alive) * sigmoid(-team_llr)
 
@@ -38,7 +33,7 @@ def emissions(team_llr, dead_logit, temper=1.0):
     e[:, H] = log_alive + log_sigmoid(team_llr)
     e[:, A] = log_alive + log_sigmoid(-team_llr)
     e[:, D] = log_sigmoid(dead_logit)
-    return e / temper
+    return e
 
 
 def transition_matrix(p=C.PARAMS):
@@ -107,7 +102,7 @@ def decode(team_llr, dead_logit, p=C.PARAMS, halves=None):
     """
     halves = C.HALVES if halves is None else halves
     labels = np.full(len(team_llr), "X", dtype="<U1")
-    em = emissions(team_llr, dead_logit, p.get("emission_temper", 1.0))
+    em = emissions(team_llr, dead_logit)
     trans = transition_matrix(p)
     for a, b in halves:
         path = viterbi(em[a:b + 1], trans)

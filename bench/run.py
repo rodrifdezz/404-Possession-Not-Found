@@ -36,12 +36,11 @@ sys.path.insert(0, os.path.join(C.OFFICIAL_REPO, "evaluation"))
 import possession_metrics as pm  # noqa: E402  (official scorer, MIT)
 
 GRID = {
-    "emission_temper": [1, 3, 6, 12, 25],
-    "switch_cost": [4, 8, 16, 32, 64],
-    "dead_cost": [3, 6, 12, 24, 48],
+    "switch_cost": [4, 6, 8, 12, 16, 24],
+    "dead_cost": [6, 12, 24, 48, 96, 192, 384],
 }
-QUICK_GRID = {"emission_temper": [1, 6, 25], "switch_cost": [8, 32], "dead_cost": [6, 24]}
-V1 = {"emission_temper": 1, "switch_cost": 8.0, "dead_cost": 6.0}
+QUICK_GRID = {"switch_cost": [8, 16], "dead_cost": [6, 48]}
+V1 = {"switch_cost": 8.0, "dead_cost": 6.0}
 SEEDS = [0, 1]
 
 
@@ -51,17 +50,14 @@ def configs(grid):
 
 
 def decode_grid(team_llr, dead_logit, halves, cfgs):
-    """(K, N) labels for K configurations; one Viterbi pass per temperature."""
-    base = hmm.emissions(team_llr, dead_logit, 1.0)
+    """(K, N) labels for K configurations, decoded together in one Viterbi pass per half."""
+    em = hmm.emissions(team_llr, dead_logit)
+    trans = np.stack([hmm.transition_matrix(c) for c in cfgs])
     out = np.full((len(cfgs), len(team_llr)), "X", dtype="<U1")
     names = np.array(["H", "A", "D"])
-    for temper in sorted({c["emission_temper"] for c in cfgs}):
-        idx = [i for i, c in enumerate(cfgs) if c["emission_temper"] == temper]
-        trans = np.stack([hmm.transition_matrix(cfgs[i]) for i in idx])
-        em = base / temper
-        for a, b in halves:
-            seg = np.broadcast_to(em[a:b + 1], (len(idx),) + em[a:b + 1].shape)
-            out[idx, a:b + 1] = names[hmm.viterbi_batch(seg, trans)]
+    for a, b in halves:
+        seg = np.broadcast_to(em[a:b + 1], (len(cfgs),) + em[a:b + 1].shape)
+        out[:, a:b + 1] = names[hmm.viterbi_batch(seg, trans)]
     return out
 
 
@@ -106,7 +102,7 @@ def lomo(obj):
 
 
 def fmt(c):
-    return "temper {emission_temper:g} · switch {switch_cost:g} · dead {dead_cost:g}".format(**c)
+    return "switch {switch_cost:g} · dead {dead_cost:g}".format(**c)
 
 
 def report(match_ids, cfgs, per_match, path_md, path_json):

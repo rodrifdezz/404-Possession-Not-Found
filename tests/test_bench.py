@@ -1,4 +1,4 @@
-"""Tests of the external bench and of the decoder temperature. Synthetic data only.
+"""Tests of the external bench and of the decoder costs. Synthetic data only.
 
     python -m unittest discover -s tests -v
 """
@@ -26,21 +26,17 @@ class ViterbiBatchTest(unittest.TestCase):
             np.testing.assert_array_equal(batch[k], hmm.viterbi(em, trans[k]))
 
 
-class TemperatureTest(unittest.TestCase):
-    def test_temperature_1_is_v1(self):
-        rng = np.random.default_rng(1)
-        llr, dead = rng.normal(size=50) * 3, rng.normal(size=50) * 3
-        np.testing.assert_array_equal(hmm.emissions(llr, dead, 1.0), hmm.emissions(llr, dead))
-
-    def test_temperature_prevents_switch_on_one_touch(self):
-        # 2 s of H, 0.24 s with an opponent right on the ball, 2 s of H
-        llr = np.r_[np.full(50, 3.0), np.full(6, -3.0), np.full(50, 3.0)]
-        dead = np.full(len(llr), -5.0)
-        p = {"switch_cost": 8.0, "dead_cost": 6.0}
-        without = hmm.decode(llr, dead, dict(p, emission_temper=1), [(0, len(llr) - 1)])
-        with_t = hmm.decode(llr, dead, dict(p, emission_temper=6), [(0, len(llr) - 1)])
-        self.assertIn("A", without)               # v1: the touch creates a fake possession
-        self.assertNotIn("A", with_t)             # with temperature: it stays with H
+class DeadCostTest(unittest.TestCase):
+    def test_brief_dead_evidence_does_not_split_a_possession(self):
+        # 2 s of H, 0.4 s of weak "stoppage" evidence (e.g. players slowing down), 2 s of H
+        llr = np.full(110, 3.0)
+        dead = np.full(len(llr), -4.0)
+        dead[50:60] = 2.0
+        half = [(0, len(llr) - 1)]
+        cheap = hmm.decode(llr, dead, {"switch_cost": 8.0, "dead_cost": 6.0}, half)
+        costly = hmm.decode(llr, dead, {"switch_cost": 8.0, "dead_cost": 48.0}, half)
+        self.assertIn("D", cheap)                 # v1: one possession becomes two
+        self.assertNotIn("D", costly)             # a real stoppage needs longer evidence
 
 
 class TargetsTest(unittest.TestCase):
@@ -163,7 +159,7 @@ class IdsseReaderTest(unittest.TestCase):
 
 class BenchEndToEndTest(unittest.TestCase):
     def test_scores_with_official_scorer(self):
-        cfgs = run.configs({"emission_temper": [1, 6], "switch_cost": [8], "dead_cost": [6]})
+        cfgs = run.configs({"switch_cost": [8], "dead_cost": [6, 48]})
         res = run.run_match(fake_match(), cfgs, [0], log=lambda *a: None)
         self.assertEqual(len(res), len(degrade.SCENARIOS) * 2)
         for scores in res.values():
