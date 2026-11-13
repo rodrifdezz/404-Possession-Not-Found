@@ -1,8 +1,8 @@
-"""Pieza 3 - quién controla: log-ratio por fotograma (positivo = Barça/H, negativo = Athletic/A).
+"""Step 3 - who is in control: per-frame log-ratio (positive = Barça/H, negative = Athletic/A).
 
-v0: ventaja de distancia del jugador más cercano de cada equipo, atenuada si el balón vuela,
-más un empujón débil del Smart Tagging. Siguiente paso natural: detectar toques (cambios bruscos
-de velocidad/dirección del balón) y exigir control sostenido para cambiar de posesión.
+Distance advantage of each team's nearest player, damped while the ball is in flight, plus a weak
+push from Smart Tagging. Natural next step: detect touches (sudden changes of ball speed or
+direction) and require sustained control before possession changes.
 """
 
 import numpy as np
@@ -16,7 +16,7 @@ def team_llr(f, tags, p=C.PARAMS):
     closest = np.minimum(dh, da)
     adv = np.clip(p["team_gain_per_m"] * (da - dh), -p["team_llr_clip"], p["team_llr_clip"])
 
-    llr = np.zeros(C.N_FRAMES)
+    llr = np.zeros(len(dh))
     control = f["ball_seen"] & (closest < p["control_radius_m"])
     near = f["ball_seen"] & ~control & (closest < p["near_radius_m"])
     llr[control] = adv[control]

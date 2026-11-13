@@ -1,9 +1,9 @@
-"""Pruebas de la caché del ATD (src/load.py) con datasets sintéticos diminutos.
+"""Tests of the ATD cache (src/load.py) on tiny synthetic datasets.
 
     python -m unittest discover -s tests -v
 
-Nada de datos reales: cada prueba escribe su propio ATD de pocos fotogramas en una carpeta
-temporal y apunta DATA_DIR y CACHE_DIR allí, así que cache/ del repo no se toca.
+No real data: each test writes its own few-frame ATD in a temporary folder and points DATA_DIR
+and CACHE_DIR there, so the repo's cache/ is never touched.
 """
 
 import contextlib
@@ -24,7 +24,7 @@ N_SLOTS = 4
 
 
 def write_dataset(data_dir, ball_x):
-    """ATD falso: 4 slots (2 por equipo) y el balón en x=ball_x (0-1) en todos los fotogramas."""
+    """Fake ATD: 4 slots (2 per team) and the ball at x=ball_x (0-1) on every frame."""
     folder = os.path.join(data_dir, "tactical")
     os.makedirs(folder, exist_ok=True)
     stem = os.path.join(folder, C.STEM)
@@ -57,18 +57,18 @@ class CacheTest(unittest.TestCase):
         shutil.rmtree(self.tmp)
 
     def load_from(self, data_dir):
-        """load_atd() sobre data_dir; devuelve (atd, nº de veces que se ha parseado el txt)."""
+        """load_atd() on data_dir; returns (atd, number of times the txt was parsed)."""
         with mock.patch.object(C, "DATA_DIR", data_dir), \
                 mock.patch.object(load, "_parse_raw", wraps=load._parse_raw) as parse, \
                 contextlib.redirect_stdout(io.StringIO()):
             atd = load.load_atd()
         return atd, parse.call_count
 
-    def test_datasets_distintos_no_comparten_cache(self):
+    def test_different_datasets_do_not_share_cache(self):
         real, fake = os.path.join(self.tmp, "real"), os.path.join(self.tmp, "fake")
         raw_real = write_dataset(real, 0.25)
         write_dataset(fake, 0.75)
-        # el caso peligroso: el dataset que se procesa después es MÁS ANTIGUO que la caché
+        # the dangerous case: the dataset processed second is OLDER than the cache
         old = os.path.getmtime(raw_real) - 3600
         os.utime(raw_real, (old, old))
 
@@ -80,7 +80,7 @@ class CacheTest(unittest.TestCase):
         np.testing.assert_allclose(atd_real["ball"][:, 0], 0.25 * C.PITCH[0], rtol=1e-6)
         self.assertEqual(len(os.listdir(self.cache_dir)), 2)
 
-    def test_mismo_dataset_reutiliza_cache(self):
+    def test_same_dataset_reuses_cache(self):
         data = os.path.join(self.tmp, "real")
         write_dataset(data, 0.25)
 
@@ -91,20 +91,20 @@ class CacheTest(unittest.TestCase):
         for k in ("players", "ball", "team"):
             np.testing.assert_array_equal(first[k], second[k])
 
-    def test_modificar_el_txt_invalida_la_cache(self):
+    def test_editing_the_txt_invalidates_the_cache(self):
         data = os.path.join(self.tmp, "real")
         raw = write_dataset(data, 0.25)
         meta = raw.replace("_atd.txt", "_atd.xml")
         self.load_from(data)
 
-        # solo cambia el TXT (contenido y fecha); el XML queda intacto
+        # only the TXT changes (content and mtime); the XML stays untouched
         meta_stat = os.stat(meta)
         mtime = os.path.getmtime(raw)
         with open(raw) as fh:
             text = fh.read()
         with open(raw, "w") as fh:
             fh.write(text.replace(":0.25,0.5,0", ":0.75,0.5,0"))
-        os.utime(raw, (mtime + 10, mtime + 10))   # fecha distinta aunque el reloj sea grueso
+        os.utime(raw, (mtime + 10, mtime + 10))   # different mtime even with a coarse clock
         self.assertEqual(os.stat(meta).st_mtime_ns, meta_stat.st_mtime_ns)
         atd, parsed = self.load_from(data)
 

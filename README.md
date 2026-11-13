@@ -6,17 +6,17 @@ Team submission for **More than a Hack 2027 — Phase 1: Ball Possession**
 For every frame of the tactical video we output `H` (home in possession), `A` (away in possession),
 `D` (dead ball) or `X` (no answer), from the provided automatic tracking and Smart Tagging.
 
-## Method (v0)
+## Method
 
 | step | file | what it does |
 |---|---|---|
 | 1. ball cleaning | `src/ball.py` | linear interpolation of short ball gaps, ball speed |
 | 2. dead ball | `src/dead.py` | per-frame log-odds of a stoppage: ball off the pitch, players walking, ball still, long ball loss, Smart Tagging set pieces |
 | 3. team in control | `src/team.py` | per-frame log-ratio home vs away: nearest-player distance advantage, damped while the ball is in flight, weak Smart Tagging prior |
-| 4. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs, decoded per half; emissions are normalised probabilities, p(H) = p(alive)·p(H\|alive) |
+| 4. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs, decoded per half; emissions are normalised probabilities, p(H) = p(alive)·p(H\|alive), tempered so that consecutive frames are not counted as independent evidence |
 
-Parameters live in `src/config.py` and are set from physical reasoning, not tuned on the public
-ground truth. No hand annotation of the provided match is used anywhere, and no rule or constant
+Parameters live in `src/config.py`. They are set from physical reasoning or chosen on an external
+bench of other matches (below), never tuned on the public ground truth. No hand annotation of the provided match is used anywhere, and no rule or constant
 is tied to specific frames of the match.
 
 ## Reproduce
@@ -41,6 +41,23 @@ python -m unittest discover -s tests -v
 `make_submission` exits with an error if the official validator rejects the CSV.
 
 Different locations: `MTAH_REPO=/path/to/official/repo` and/or `MTAH_DATA_DIR=/path/to/data`.
+
+## External bench (how decoder parameters are chosen)
+
+The emission temperature and the switching costs are chosen on **other matches only**: the seven
+open IDSSE / DFL Bundesliga games (Bassek et al., *Scientific Data* 12, 195, 2025, CC BY 4.0),
+whose per-frame `BallStatus` / `BallPossession` flags are the same kind of tracking flags the
+challenge ground truth is derived from. Each game is degraded to resemble the provided automatic
+tracking, using only the figures published in DATA.md (`bench/degrade.py`), run through the same
+pipeline as the submission (`src/pipeline.py`) and scored with the official scoring code,
+leaving one match out at a time. Results: `docs/BENCH.md`.
+
+```bash
+python -m bench.download     # 7 matches from figshare into external/idsse/ (~2.6 GB, md5-checked)
+python -m bench.run          # ~20 min -> docs/BENCH.md
+```
+
+The bench needs only the Python standard library on top of `requirements.txt`.
 
 ## Synthetic data
 

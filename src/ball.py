@@ -1,4 +1,6 @@
-"""Pieza 1 - limpiar el balón: rellenar huecos cortos y calcular su velocidad."""
+"""Step 1 - clean the ball: fill short gaps and compute its speed."""
+
+import warnings
 
 import numpy as np
 
@@ -6,14 +8,14 @@ from . import config as C
 
 
 def nan_runs(mask):
-    """(inicio, fin_exclusivo) de cada racha True en un array booleano."""
+    """(start, exclusive_end) of every True run in a boolean array."""
     padded = np.concatenate(([False], mask, [False])).astype(np.int8)
     d = np.diff(padded)
     return np.flatnonzero(d == 1), np.flatnonzero(d == -1)
 
 
 def interpolate_short_gaps(ball, max_gap):
-    """Interpolación lineal de huecos de <= max_gap frames con balón visto a ambos lados."""
+    """Linear interpolation of gaps of <= max_gap frames with the ball seen on both sides."""
     out = ball.copy()
     missing = np.isnan(ball[:, 0])
     starts, ends = nan_runs(missing)
@@ -30,15 +32,13 @@ def rolling_median(x, w):
     half = w // 2
     padded = np.concatenate([np.full(half, np.nan), x, np.full(half, np.nan)])
     windows = np.lib.stride_tricks.sliding_window_view(padded, w)
-    with np.errstate(all="ignore"):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            return np.nanmedian(windows, axis=1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)     # all-NaN windows -> NaN, silently
+        return np.nanmedian(windows, axis=1)
 
 
 def speed(xy, smooth=1):
-    """Velocidad en m/s (NaN donde no hay posición)."""
+    """Speed in m/s (NaN where there is no position)."""
     v = np.full(len(xy), np.nan, dtype=np.float32)
     v[1:] = np.linalg.norm(np.diff(xy, axis=0), axis=1) * C.FPS
     return rolling_median(v, smooth).astype(np.float32)

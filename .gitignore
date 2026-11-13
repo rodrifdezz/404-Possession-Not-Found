@@ -1,4 +1,4 @@
-# --- Datos del partido: licenciados, NUNCA se suben (términos del reto) ---
+# --- Match data: licensed, NEVER committed (challenge terms) ---
 data/
 fake_data/
 cache/
@@ -9,15 +9,18 @@ cache/
 *_smart_tagging.xml
 *_homography.csv
 
-# --- Salidas locales ---
+# --- Local outputs ---
 outputs/
 
-# --- Python / entorno ---
+# --- Python / environment ---
 .venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-# --- macOS / editores ---
+# --- macOS / editors ---
 .DS_Store
 .vscode/
+
+# --- External data (IDSSE/DFL): downloaded with `python -m bench.download`, never committed ---
+external/

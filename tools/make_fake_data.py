@@ -1,14 +1,14 @@
-"""Genera un partido FALSO con el mismo formato que los datos reales, más su ground truth.
+"""Generate a FAKE match in the same format as the real data, plus its ground truth.
 
-Para qué: poder desarrollar, depurar y pedir ayuda a un LLM (ChatGPT, Claude...) con datos que
-NO son del partido. Los datos reales no se pueden enseñar a ningún LLM (términos del reto).
+Why: to develop, debug and ask an LLM (ChatGPT, Claude...) for help with data that is NOT from
+the match. The real data must never be shown to any LLM (challenge terms).
 
-    python tools/make_fake_data.py                       # escribe fake_data/ (gitignored)
+    python tools/make_fake_data.py                       # writes fake_data/ (gitignored)
     MTAH_DATA_DIR=fake_data python -m src.make_submission --name fake_v0
     python -m src.evaluate --gt fake_data/fake_gt.csv
 
-Es una simulación muy simplificada: sirve para comprobar que el código funciona y tiene sentido,
-no para medir cómo de bueno será en el partido real.
+It is a very simplified simulation: good for checking that the code runs and makes sense, not
+for measuring how well it will do on the real match.
 """
 
 import argparse
@@ -22,7 +22,7 @@ from src import config as C  # noqa: E402
 
 L, W = C.PITCH
 N_SLOTS = 46
-PRE_KICKOFF_S = 10.0   # tramo D simulado al empezar la 2ª parte, antes del saque
+PRE_KICKOFF_S = 10.0   # simulated D stretch at the start of the 2nd half, before the kick-off
 
 
 def simulate(rng):
@@ -45,7 +45,7 @@ def simulate(rng):
     for h, (a, b) in enumerate(C.HALVES):
         f = a
         state_team = 1 if h == 0 else -1
-        if h == 1:   # tramo D antes del saque de la 2ª parte
+        if h == 1:   # D stretch before the 2nd-half kick-off
             kb = a + int(PRE_KICKOFF_S * C.FPS) - 1
             for t in range(a, kb + 1):
                 noise += rng.normal(0, 0.03, noise.shape)
@@ -87,10 +87,10 @@ def simulate(rng):
             f = seg_end
             if f > b:
                 break
-            if rng.random() < 0.75:      # robo: el otro equipo controla
+            if rng.random() < 0.75:      # turnover: the other team takes control
                 state_team = -state_team
                 carrier = int(rng.choice(np.flatnonzero(team_of_player == state_team)))
-            else:                        # balón muerto
+            else:                        # dead ball
                 dd = int(np.clip(rng.exponential(12), 4, 30) * C.FPS)
                 d_end = min(f + dd, b + 1)
                 spot = (rng.uniform(5, L - 5), -1.5 if rng.random() < 0.5 else W + 1.5)
@@ -103,13 +103,13 @@ def simulate(rng):
                 carrier = int(rng.choice(np.flatnonzero(team_of_player == state_team)))
                 restarts.append((d_end, state_team, "Throw-in"))
                 f = d_end
-            if rng.random() < 0.05:      # el tracker cambia de slot a un jugador
+            if rng.random() < 0.05:      # the tracker moves a player to another slot
                 k = int(rng.integers(22))
                 pool = home_slots if team_of_player[k] > 0 else away_slots
                 free = [s for s in pool if s not in set(slot_of)]
                 slot_of[k] = rng.choice(free)
 
-    # el tracker pierde el balón ~40% del tiempo y a algunos jugadores
+    # the tracker loses the ball ~40% of the time, and some players
     vis, seen = True, np.ones(n, dtype=bool)
     for t in range(n):
         vis = (rng.random() > 1 / 45) if vis else (rng.random() < 1 / 30)
@@ -133,7 +133,7 @@ def write(out, pos, ball, gt, restarts, phases):
                  '<Team id="FIFATMB"><Name>Atletic Club</Name></Team>'
                  '</Teams><Players>{}</Players></Metadata></Main>'.format(players))
 
-    print("escribiendo tracking falso (~1 min)...")
+    print("writing fake tracking (~1 min)...")
     with open(stem + "_atd.txt", "w") as fh:
         for t in range(len(ball)):
             groups = []
@@ -176,4 +176,4 @@ if __name__ == "__main__":
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     write(args.out, *simulate(np.random.default_rng(args.seed)))
-    print("listo:", args.out)
+    print("done:", args.out)

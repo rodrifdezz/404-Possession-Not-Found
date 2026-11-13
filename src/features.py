@@ -1,4 +1,4 @@
-"""Variables por fotograma calculadas a partir del tracking (sin decidir nada todavía)."""
+"""Per-frame variables computed from the tracking (nothing is decided yet)."""
 
 import warnings
 
@@ -21,13 +21,13 @@ def _nanmean(a, axis):
 
 def compute(atd, ball_xy, ball_speed):
     players, team = atd["players"], atd["team"]
-    dist = np.linalg.norm(players - ball_xy[:, None, :], axis=2)        # (N, 46)
+    dist = np.linalg.norm(players - ball_xy[:, None, :], axis=2)        # (N, slots)
     d_home = _nanmin(np.where(team[None, :] > 0, dist, np.nan), axis=1)
     d_away = _nanmin(np.where(team[None, :] < 0, dist, np.nan), axis=1)
 
     step = np.full(players.shape[:2], np.nan, dtype=np.float32)
     step[1:] = np.linalg.norm(np.diff(players, axis=0), axis=2) * C.FPS
-    step[step > 12] = np.nan              # saltos de identidad del tracker, no carreras reales
+    step[step > 12] = np.nan              # tracker identity jumps, not real sprints
     player_speed = _nanmean(step, axis=1)
 
     return {
@@ -38,5 +38,4 @@ def compute(atd, ball_xy, ball_speed):
         "d_home": d_home,
         "d_away": d_away,
         "player_speed": player_speed,
-        "n_players": np.sum(~np.isnan(players[:, :, 0]), axis=1),
     }
