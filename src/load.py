@@ -1,10 +1,10 @@
-"""Lectura del tracking (ATD) y del Smart Tagging a arrays de numpy.
+"""Read the tracking (ATD) and the Smart Tagging into numpy arrays.
 
-El ATD se lee una vez (~1-2 min) y se guarda en cache/atd_<huella>.npz; las siguientes veces carga
-en segundos. cache/ está en .gitignore: son datos derivados del partido y NO se pueden publicar.
+The ATD is parsed once (~1-2 min) and stored in cache/atd_<fingerprint>.npz; later runs load it
+in seconds. cache/ is in .gitignore: it is data derived from the match and must NOT be published.
 
-Formato de cada línea del ATD:  <frame_id>:<x,y,s>;<x,y,s>;...(46 slots):<x,y,...balón>
-frame_id empieza en 1; el fotograma de vídeo (fila del CSV) es frame_id - 1.
+Format of each ATD line:  <frame_id>:<x,y,s>;<x,y,s>;...(46 slots):<x,y,...ball>
+frame_id starts at 1; the video frame (CSV row) is frame_id - 1.
 """
 
 import hashlib
@@ -17,7 +17,7 @@ from . import config as C
 
 
 def track_teams(meta_path):
-    """+1 si el slot es del local (primer equipo del XML), -1 si es visitante."""
+    """+1 if the slot belongs to the home team (first team in the XML), -1 if away."""
     root = ET.parse(meta_path).getroot()
     team_ids = [t.get("id") for t in root.iter("Team")]
     home = team_ids[0]
@@ -37,20 +37,21 @@ def _parse_raw(raw_path, n_slots):
             if not 0 <= f < C.N_FRAMES:
                 continue
             vals = np.array(parts[1].replace(";", ",").split(","), dtype=np.float64)
-            k = len(vals) // n_slots          # campos por jugador (x, y, velocidad...)
+            k = len(vals) // n_slots          # fields per player (x, y, speed...)
             if k >= 2 and k * n_slots == len(vals):
                 players[f] = vals.reshape(n_slots, k)[:, :2]
             b = parts[2].split(",")
             if len(b) >= 2 and b[0][:1] != "N":
                 ball[f] = (float(b[0]), float(b[1]))
-    # normalizado 0-1 -> metros
+    # normalised 0-1 -> metres
     scale = np.array(C.PITCH, dtype=np.float32)
     return players * scale, ball * scale
 
 
 def _cache_path(*sources):
-    """cache/atd_<huella>.npz: la huella cambia con la ruta, el tamaño o la fecha de cada fichero,
-    así que otro dataset (p. ej. fake_data/) o un fichero modificado no reutilizan caché ajena."""
+    """cache/atd_<fingerprint>.npz: the fingerprint changes with each file's path, size or
+    modification time, so another dataset (e.g. fake_data/) or an edited file never reuses a
+    cache that is not its own."""
     key = hashlib.sha1()
     for p in sources:
         st = os.stat(p)
@@ -59,17 +60,17 @@ def _cache_path(*sources):
 
 
 def load_atd(use_cache=True):
-    """dict con players (N,46,2) m, ball (N,2) m, team (46,) +1/-1. NaN = no visto."""
+    """dict with players (N,46,2) m, ball (N,2) m, team (46,) +1/-1. NaN = not seen."""
     meta, raw = C.asset("atd_meta"), C.asset("atd_raw")
     for p in (meta, raw):
         if not os.path.isfile(p):
-            raise FileNotFoundError("No encuentro {}. Revisa MTAH_DATA_DIR / MTAH_REPO.".format(p))
+            raise FileNotFoundError("{} not found. Check MTAH_DATA_DIR / MTAH_REPO.".format(p))
     cache = _cache_path(meta, raw)
     if use_cache and os.path.isfile(cache):
         z = np.load(cache)
         return {k: z[k] for k in z.files}
     team = track_teams(meta)
-    print("leyendo {} (solo la primera vez, 1-2 min)...".format(os.path.basename(raw)))
+    print("reading {} (first time only, 1-2 min)...".format(os.path.basename(raw)))
     players, ball = _parse_raw(raw, len(team))
     os.makedirs(C.CACHE_DIR, exist_ok=True)
     np.savez(cache, players=players, ball=ball, team=team)
@@ -77,7 +78,7 @@ def load_atd(use_cache=True):
 
 
 def load_smart_tagging():
-    """Lista de dicts {code, start, end (fotogramas), tags}. Vacía si no hay fichero."""
+    """List of dicts {code, start, end (frames), tags}. Empty if there is no file."""
     path = C.asset("smart_tagging")
     if not os.path.isfile(path):
         return []

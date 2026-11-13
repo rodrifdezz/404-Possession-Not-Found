@@ -1,7 +1,7 @@
-"""Un comando: datos -> CSV de entrega validado.
+"""One command: data -> validated submission CSV.
 
-    python -m src.make_submission              # escribe outputs/<TEAM_NAME>.csv
-    python -m src.make_submission --name prueba_rodri   # otro nombre, para comparar versiones
+    python -m src.make_submission              # writes outputs/<TEAM_NAME>.csv
+    python -m src.make_submission --name my_try   # another name, to compare versions
 """
 
 import argparse
@@ -12,7 +12,7 @@ import sys
 import numpy as np
 
 from . import config as C
-from . import ball, dead, features, hmm, load, team
+from . import load, pipeline
 
 
 def summary(labels):
@@ -31,10 +31,10 @@ def summary(labels):
                 n_poss += 1
                 durs.append((e - s) / C.FPS)
     minutes = graded.sum() / C.FPS / 60
-    print("resumen (partido completo, {:.0f} min puntuados)".format(minutes))
+    print("summary (full match, {:.0f} graded min)".format(minutes))
     for k in "HAD":
         print("  {}  {:6.1%}".format(k, np.mean(lab == k)))
-    print("  posesiones {}  ({:.1f}/min)  duración media {:.1f} s  mediana {:.1f} s".format(
+    print("  possessions {}  ({:.1f}/min)  mean duration {:.1f} s  median {:.1f} s".format(
         n_poss, n_poss / minutes, np.mean(durs), np.median(durs)))
 
 
@@ -46,27 +46,23 @@ def write_csv(labels, path):
 
 
 class ValidationError(Exception):
-    """El validador oficial ha rechazado el CSV."""
+    """The official validator rejected the CSV."""
 
 
 def validate(path):
     script = os.path.join(C.OFFICIAL_REPO, "evaluation", "validate_submission.py")
     if not os.path.isfile(script):
-        print("(no encuentro el validador oficial en {}; revisa MTAH_REPO)".format(script))
+        print("(official validator not found at {}; check MTAH_REPO)".format(script))
         return
     if subprocess.run([sys.executable, script, path]).returncode != 0:
-        raise ValidationError("el validador oficial rechaza {}".format(path))
+        raise ValidationError("the official validator rejects {}".format(path))
 
 
 def run(name):
-    atd = load.load_atd()
-    tags = load.load_smart_tagging()
-    ball_xy, ball_speed = ball.clean_ball(atd["ball"])
-    f = features.compute(atd, ball_xy, ball_speed)
-    labels = hmm.decode(team.team_llr(f, tags), dead.dead_logit(f, tags))
+    labels = pipeline.predict(load.load_atd(), load.load_smart_tagging())
     path = os.path.join(C.OUT_DIR, name + ".csv")
     write_csv(labels, path)
-    print("escrito", os.path.relpath(path, C.ROOT))
+    print("written", os.path.relpath(path, C.ROOT))
     summary(labels)
     validate(path)
     return path

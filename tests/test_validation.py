@@ -1,8 +1,8 @@
-"""Pruebas de make_submission.validate(): si el validador oficial rechaza el CSV, se falla.
+"""Tests of make_submission.validate(): if the official validator rejects the CSV, it fails.
 
     python -m unittest discover -s tests -v
 
-Con validadores falsos (siempre disponibles) y, si está el repo oficial, con el de verdad.
+With fake validators (always available) and, if the official repo is present, the real one.
 """
 
 import contextlib
@@ -19,8 +19,8 @@ from src import make_submission
 VALIDATOR = os.path.join(C.OFFICIAL_REPO, "evaluation", "validate_submission.py")
 
 
-class ValidadorFalsoTest(unittest.TestCase):
-    """Un repo oficial de mentira cuyo validador termina con el código que se le pida."""
+class FakeValidatorTest(unittest.TestCase):
+    """A dummy official repo whose validator exits with whatever code we ask for."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -38,19 +38,19 @@ class ValidadorFalsoTest(unittest.TestCase):
             make_submission.validate(self.csv)
         return out.getvalue()
 
-    def test_validador_rechaza_falla(self):
+    def test_validator_rejects_fails(self):
         with self.assertRaises(make_submission.ValidationError):
             self.run_validate(exit_code=1)
 
-    def test_validador_acepta_no_falla(self):
+    def test_validator_accepts_passes(self):
         self.run_validate(exit_code=0)
 
-    def test_sin_validador_avisa(self):
-        self.assertIn("no encuentro el validador oficial", self.run_validate())
+    def test_missing_validator_warns(self):
+        self.assertIn("official validator not found", self.run_validate())
 
 
-@unittest.skipUnless(os.path.isfile(VALIDATOR), "no está el repo oficial (MTAH_REPO)")
-class ValidadorOficialTest(unittest.TestCase):
+@unittest.skipUnless(os.path.isfile(VALIDATOR), "official repo not available (MTAH_REPO)")
+class OfficialValidatorTest(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -63,11 +63,11 @@ class ValidadorOficialTest(unittest.TestCase):
             fh.writelines("{},X\n".format(i) for i in range(n_rows))
         return path
 
-    def test_csv_correcto_pasa(self):
+    def test_correct_csv_passes(self):
         with contextlib.redirect_stdout(io.StringIO()):
             make_submission.validate(self.write(C.N_FRAMES))
 
-    def test_csv_con_filas_de_menos_falla(self):
+    def test_csv_with_missing_rows_fails(self):
         with self.assertRaises(make_submission.ValidationError):
             make_submission.validate(self.write(C.N_FRAMES - 1))
 

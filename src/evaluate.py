@@ -1,11 +1,11 @@
-"""Puntúa con el scorer OFICIAL todos los CSV de outputs/.
+"""Score every CSV in outputs/ with the OFFICIAL scorer.
 
-    python -m src.evaluate                     # contra los 5 minutos públicos
-    python -m src.evaluate --gt ruta/gt.csv    # contra otra ground truth (p. ej. la de datos falsos)
-    python -m src.evaluate --bootstrap 1000    # intervalos de confianza
+    python -m src.evaluate                     # against the public 5 minutes
+    python -m src.evaluate --gt path/gt.csv    # against another ground truth (e.g. the fake data's)
+    python -m src.evaluate --bootstrap 1000    # confidence intervals
 
-Recordatorio de las reglas: los 5 minutos públicos sirven para comprobar que el pipeline es
-correcto, NO para elegir parámetros ni entrenar.
+Reminder of the rules: the public 5 minutes are for checking that the pipeline is correct, NOT
+for choosing parameters or training.
 """
 
 import argparse
