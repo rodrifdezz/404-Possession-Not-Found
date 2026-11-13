@@ -161,7 +161,7 @@ class BenchEndToEndTest(unittest.TestCase):
     def test_scores_with_official_scorer(self):
         cfgs = run.configs({"switch_cost": [8], "dead_cost": [6, 48]})
         res = run.run_match(fake_match(), cfgs, [0], log=lambda *a: None)
-        self.assertEqual(len(res), len(degrade.SCENARIOS) * 2)
+        self.assertEqual(len(res), len(run.SCENARIOS) * 2)
         for scores in res.values():
             self.assertEqual(len(scores), 2)
             for s in scores:

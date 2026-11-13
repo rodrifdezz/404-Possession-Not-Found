@@ -65,6 +65,13 @@ PARAMS = {
     "dead_cost": 48.0,              # alive <-> D      (v1: 6)
 }
 
+# Where the per-frame evidence comes from:
+#   "rules"    hand-weighted rules (dead.py, team.py)                                   v2
+#   "learned"  logistic models fitted on external matches (learned.py, bench/train.py)  v3
+# Smart Tagging is added on top in both cases.
+EVIDENCE = "rules"
+EVIDENCE_MODEL = os.path.join("models", "evidence_v3.json")
+
 # Smart Tagging phases whose 'Team' is the team IN possession (hypothesis to check visually on
 # the video; the "DEFENDING ..." ones are left out until their meaning is confirmed).
 ATTACKING_CODES = {"BUILD UP", "PROGRESSION", "BALL IN FINAL THIRD", "CREATING CHANCES",

@@ -43,3 +43,13 @@ These figures only catch gross errors. Parameters are chosen on the external ben
    `python -m bench.run --report-only` rewrites the report from the saved raw results.
 3. Result in `docs/BENCH.md`: the leave-one-match-out table and the final parameters.
 4. Copy the final parameters into `src/config.py`, regenerate the submission and log it in the JOURNAL.
+
+## Learned evidence (v3)
+1. `python -m bench.train` (~35 min): fits the two logistic models of `src/learned.py` on the
+   external matches, validates them leaving one match out against v2, and writes
+   `models/evidence_v3.json` and `docs/BENCH_V3.md`.
+2. The adoption rule is written in `bench/train.py` before running it. Do not change it after
+   seeing a result.
+3. If adopted: `EVIDENCE = "learned"` in `src/config.py` and the costs from `docs/BENCH_V3.md`.
+4. Any new feature goes into `src/learned.py` and is judged with `python -m bench.train`, never on
+   the public 5 minutes.

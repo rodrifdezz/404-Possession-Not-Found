@@ -1,4 +1,7 @@
-"""External bench: choose the decoder parameters on matches that are NOT the challenge match.
+"""External bench for the rule-based evidence (v2): choose the decoder costs on other matches.
+
+(The learned evidence, v3, has its own validation with model fitting inside each fold:
+bench/train.py.)
 
     python -m bench.run                  # full grid, 7 matches x 2 scenarios x 2 seeds (~20 min)
     python -m bench.run --quick          # quick check (1 seed, small grid)
@@ -42,6 +45,7 @@ GRID = {
 QUICK_GRID = {"switch_cost": [8, 16], "dead_cost": [6, 48]}
 V1 = {"switch_cost": 8.0, "dead_cost": 6.0}
 SEEDS = [0, 1]
+SCENARIOS = ("short_gaps", "long_gaps")   # the scenarios docs/BENCH.md was produced with
 
 
 def configs(grid):
@@ -75,9 +79,12 @@ def run_match(m, cfgs, seeds, log=print):
     """dict[(scenario, seed, target)] -> list of scores, one per configuration."""
     truth = targets.all_targets(m["labels"])
     out = {}
-    for scenario, seed in itertools.product(degrade.SCENARIOS, seeds):
+    for scenario, seed in itertools.product(SCENARIOS, seeds):
         d = degrade.degrade(m, scenario, seed)
-        team_llr, dead_logit = pipeline.evidence(d, [], C.PARAMS, m["pitch"])
+        # always the rules: the learned evidence is validated by bench/train.py, which never
+        # scores a model on a match it was fitted on
+        team_llr, dead_logit = pipeline.evidence(d, [], C.PARAMS, m["pitch"], m["halves"],
+                                                 source="rules")
         preds = decode_grid(team_llr, dead_logit, m["halves"], cfgs)
         for name, gt in truth.items():
             out[(scenario, seed, name)] = [score(gt, p) for p in preds]
@@ -175,7 +182,7 @@ def main(argv=None):
         cfgs = configs(QUICK_GRID if args.quick else GRID)
         seeds = SEEDS[:1] if args.quick else SEEDS
         print("{} matches, {} configurations, {} scenarios x {} seeds".format(
-            len(match_ids), len(cfgs), len(degrade.SCENARIOS), len(seeds)))
+            len(match_ids), len(cfgs), len(SCENARIOS), len(seeds)))
         per_match = []
         for mid in match_ids:
             t = time.time()

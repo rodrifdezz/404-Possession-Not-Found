@@ -64,8 +64,12 @@ One entry per change. Date · who · what · why · effect on the full match
   Details: `docs/BENCH.md`.
 - Effect on the full challenge match: possessions 516 → **333** (3.1/min), mean duration
   6.5 → **10.0 s**, median 6.5 s, D 47.4 % → 47.7 %. Valid; md5 98fdf1aa… identical on two runs.
-- Not looked at: the public 5 minutes (not used to choose or confirm anything).
 - Decision: kept.
+- Public 5 minutes, scored ONCE after the parameters were locked and merged, for information
+  only (nothing was changed after seeing it): spellF1 0.316 [bootstrap 0.19-0.45], macroF1 0.759
+  [0.53-0.85]; F1 H 0.76, A 0.82, D 0.70. For reference, the official smooth50 baseline scores
+  0.326 / 0.621 there and 0.243 on the full match. With 17 possessions the window cannot rank
+  versions (FAQ.md).
 - Limit: the absolute bench level is low (~0.29). Tuning the decoder is done; the remaining margin
   is in the evidence (`dead.py`, `team.py`), especially dead-ball detection. Any new rule must be
   validated on the bench before being kept.

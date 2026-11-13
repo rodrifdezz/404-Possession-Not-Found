@@ -25,7 +25,12 @@ def team_llr(f, tags, p=C.PARAMS):
     with np.errstate(invalid="ignore"):
         flying = f["ball_speed"] > p["ball_flight_speed"]
     llr[flying] *= p["flight_factor"]
+    return add_tag_llr(llr, tags, p)
 
+
+def add_tag_llr(llr, tags, p=C.PARAMS):
+    """Add, in place, the Smart Tagging evidence of the team in possession: a weak push during
+    attacking phases. Returns llr."""
     for t in tags:
         sign = C.TEAM_TAG.get(t["tags"].get("team", "").lower(), 0)
         if sign and t["code"] in C.ATTACKING_CODES:

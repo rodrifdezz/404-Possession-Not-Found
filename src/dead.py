@@ -48,7 +48,13 @@ def dead_logit(f, tags, p=C.PARAMS, pitch=None):
     # 4) ball lost for a long time
     z[_run_length_at_least(~f["ball_raw_seen"], int(p["long_gap_s"] * C.FPS))] += 0.5
 
-    # 5) Smart Tagging: the first part of a SET PIECES tag is the set-up of the restart
+    # 5) Smart Tagging
+    return add_tag_logit(z, tags, p)
+
+
+def add_tag_logit(z, tags, p=C.PARAMS):
+    """Add, in place, the Smart Tagging evidence of a stoppage: the first part of a SET PIECES
+    tag is the set-up of the restart. Returns z."""
     tail = int(p["set_piece_tail_s"] * C.FPS)
     for t in tags:
         if t["code"] == "SET PIECES":

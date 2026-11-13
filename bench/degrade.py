@@ -7,18 +7,27 @@ from the ground truth or the video:
     balls in the air;
   - positions are noisy and players disappear for a while (46 slots for 22 players).
 
-We do not know how long the ball gaps last, so the bench uses two scenarios (short and long gaps)
-and picks parameters that work in both, instead of betting on one.
+We do not know how long the ball gaps last, nor whether the ball is lost more during play (the
+occlusions DATA.md mentions) or during stoppages (ball off camera, players crowding a set piece).
+So there are three scenarios, and a choice is only kept if it works in all of them:
+
+  short_gaps     gaps of ~0.6 s, more likely in crowds, in the air and off the pitch
+  long_gaps      the same with gaps of ~3 s
+  stoppage_gaps  gaps of ~3 s, much more likely while the ball is dead
 """
 
 import numpy as np
 
 BALL_MISSING = 0.41          # DATA.md: 1 - 94,214 / 158,857 graded frames
-SCENARIOS = {"short_gaps": 0.6, "long_gaps": 3.0}   # mean duration of a ball gap (s)
+SCENARIOS = {                # mean gap duration (s), extra weight of losing the ball when dead
+    "short_gaps": (0.6, 0.0),
+    "long_gaps": (3.0, 0.0),
+    "stoppage_gaps": (3.0, 6.0),
+}
 FPS = 25
 
 
-def risk(m):
+def risk(m, dead_weight=0.0):
     """Relative weight of losing the ball on each frame (1 = normal)."""
     L, W = m["pitch"]
     x, y = m["ball"][:, 0], m["ball"][:, 1]
@@ -27,14 +36,17 @@ def risk(m):
         crowded = np.sum(d < 3.0, axis=1) >= 3
         in_air = m["ball_z"] > 1.5
         outside = (x < 0) | (x > L) | (y < 0) | (y > W)
-    return 1.0 + 2.0 * crowded + 2.0 * in_air + 2.0 * outside
+    w = 1.0 + 2.0 * crowded + 2.0 * in_air + 2.0 * outside
+    if dead_weight:
+        w = w + dead_weight * (m["labels"] == "D")
+    return w
 
 
-def _ball_gaps(m, rng, mean_gap_s):
+def _ball_gaps(m, rng, mean_gap_s, dead_weight=0.0):
     """Mask of frames without ball: exponentially long gaps until 41 % is reached."""
     n = len(m["ball"])
     graded = m["labels"] != "X"
-    w = risk(m) * graded
+    w = risk(m, dead_weight) * graded
     p = w / w.sum()
     missing = np.zeros(n, dtype=bool)
     target = BALL_MISSING * graded.sum()
@@ -76,5 +88,5 @@ def degrade(m, scenario, seed):
     players = m["players"] + _smooth_noise(rng, m["players"].shape, 0.2, 25)
     players[_player_dropouts(m, rng)] = np.nan
     ball = m["ball"] + _smooth_noise(rng, m["ball"].shape, 0.2, 5)
-    ball[_ball_gaps(m, rng, SCENARIOS[scenario])] = np.nan
+    ball[_ball_gaps(m, rng, *SCENARIOS[scenario])] = np.nan
     return {"players": players, "team": m["team"], "ball": ball}
