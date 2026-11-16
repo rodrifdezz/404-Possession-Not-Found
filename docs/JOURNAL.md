@@ -107,3 +107,21 @@ One entry per change. Date · who · what · why · effect on the full match
   on two machines (macOS + Windows), and `python -m bench.run --evidence model` on the 7 IDSSE
   matches (independent check on another league; the model has never seen them).
 - Decision: adopted (`EVIDENCE = "model"`), subject to the two checks above.
+
+## 2026-11-17 · JAN · independent DFL validation of v3
+
+- Ran `python -m bench.run --evidence model` on seven external IDSSE/DFL matches, using two
+  ball-gap scenarios and two degradation seeds. Full results: `docs/BENCH_MODEL.md`.
+- The stored v3 model was trained only on the three Metrica sample matches; none of the DFL
+  matches were used to fit its classifiers.
+- Leave-one-match-out Spell F1: rules v2 **0.296** → model v3 **0.571**. The model outperformed
+  the rules on all seven matches.
+- Macro F1: **0.496** → **0.883**.
+- Decoder costs selected by the external benchmark: `switch_cost = 6`, `dead_cost = 48`,
+  matching the current v3 configuration. No parameter changes needed.
+- Full challenge-match CSV validated successfully: 199,319 frames, 296 possessions,
+  10.9 s mean duration, 49.4% D on graded frames.
+- Local reproducibility verified across repeated Windows runs.
+  MD5: `d5484211b83141ac50ae7d101de57fae`.
+- Cross-machine MD5 verification remains pending.
+- Decision: retain v3 without changing its model or parameters.
