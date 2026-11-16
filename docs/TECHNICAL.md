@@ -158,6 +158,8 @@ challenge match (EVALUATION.md) and 0.238 on our degraded external matches, whic
 are of comparable difficulty. Even so, these numbers describe other matches: the score on the
 challenge match will differ.
 
+**Independent validation on a second provider (IDSSE / DFL).** The stored v3 classifier, trained on three Metrica sample matches, was evaluated on seven unseen Bundesliga matches with artificially degraded tracking. Mean spellF1 improved from **0.296 (rules v2)** to **0.571 (model v3)**, outperforming the rules on all seven matches. MacroF1 improved from 0.496 to 0.883. Leave-one-match-out decoder selection returned `switch_cost = 6` and `dead_cost = 48`, matching the existing configuration. No model or parameter changes were made. Full results: `docs/BENCH_MODEL.md`. These are external validation results, not a score on the challenge match.
+
 ## 6. Possession rules implemented
 
 * **Control, not proximity.** Possession changes only when the other team controls the ball. The
