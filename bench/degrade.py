@@ -78,3 +78,83 @@ def degrade(m, scenario, seed):
     ball = m["ball"] + _smooth_noise(rng, m["ball"].shape, 0.2, 5)
     ball[_ball_gaps(m, rng, SCENARIOS[scenario])] = np.nan
     return {"players": players, "team": m["team"], "ball": ball}
+
+
+# ------------------------------------------------------------------ training degradations
+# A second, independent way of damaging a clean match, used ONLY to build the training mixture of
+# the learned evidence (bench/train_model.py): Markov-chain ball visibility, white position noise,
+# player dropouts in bursts and tracks fragmented over 46 slots. Training on several different
+# degradations (these presets plus the two scenarios above) keeps the model from relying on the
+# quirks of any single one; the real tracking is none of them.
+
+NORMAL = {"ball_visible": 0.59, "ball_gap_mean_s": 1.2, "crowd_boost": 2.5, "ball_noise_m": 0.25,
+          "player_noise_m": 0.15, "player_missing": 0.07, "player_gap_mean_s": 2.0,
+          "n_slots": 46, "fragment_every_s": 240.0}
+EASY = dict(NORMAL, ball_visible=0.68, ball_gap_mean_s=0.8, ball_noise_m=0.15,
+            player_noise_m=0.1, player_missing=0.04)
+HARD = dict(NORMAL, ball_visible=0.5, ball_gap_mean_s=2.0, ball_noise_m=0.5,
+            player_noise_m=0.3, player_missing=0.12, fragment_every_s=60.0)
+PRESETS = {"normal": NORMAL, "easy": EASY, "hard": HARD}
+
+
+def degrade_markov(m, preset, seed):
+    """Degraded copy of match m with one of PRESETS. The ground truth is not touched."""
+    p = PRESETS[preset]
+    rng = np.random.default_rng(seed)
+    pl = m["players"].astype(np.float64)
+    ball = m["ball"].astype(np.float64)
+    n, s, _ = pl.shape
+    pl = pl + rng.normal(0, p["player_noise_m"], pl.shape)
+    ball = ball + rng.normal(0, p["ball_noise_m"], ball.shape)
+
+    # ball: visible/hidden Markov chain, lost more often with players around it
+    d = np.linalg.norm(pl - ball[:, None, :], axis=2)
+    with np.errstate(invalid="ignore"):
+        crowd = np.nansum(d < 3.0, axis=1)
+    q_end = 1.0 / (p["ball_gap_mean_s"] * FPS)                      # leaving a gap
+    q_start = q_end * (1 - p["ball_visible"]) / p["ball_visible"]   # equilibrium -> visible share
+    hazard = q_start * (1 + p["crowd_boost"] * np.clip(crowd - 1, 0, 4) / 4.0)
+    hazard /= hazard.mean() / q_start
+    u = rng.random(n)
+    seen = np.empty(n, dtype=bool)
+    state = True
+    for t in range(n):
+        state = (u[t] >= hazard[t]) if state else (u[t] < q_end)
+        seen[t] = state
+    ball[~seen] = np.nan
+
+    # players lost in bursts
+    pe = 1.0 / (p["player_gap_mean_s"] * FPS)
+    ps = pe * p["player_missing"] / (1 - p["player_missing"])
+    r = rng.random((n, s))
+    st = np.zeros(s, dtype=bool)
+    for t in range(n):
+        st = np.where(st, r[t] >= pe, r[t] < ps)
+        pl[t, st] = np.nan
+
+    # fragmented tracks: a player jumps to another free slot of his team
+    team = m["team"]
+    per_team = p["n_slots"] // 2
+    out = np.full((n, p["n_slots"], 2), np.nan)
+    out_team = np.array([1] * per_team + [-1] * per_team, dtype=np.int8)
+    assign = {}
+    for group, offset in (([i for i in range(s) if team[i] > 0], 0),
+                          ([i for i in range(s) if team[i] < 0], per_team)):
+        for j, i in enumerate(group):
+            assign[i] = offset + (j % per_team)
+    change = rng.random((n, s)) < 1.0 / (p["fragment_every_s"] * FPS)
+    src = np.arange(s)
+    dst = np.array([assign[i] for i in range(s)])
+    for t in range(n):
+        for i in np.flatnonzero(change[t]):
+            offset = 0 if team[i] > 0 else per_team
+            used = set(dst.tolist())
+            free = [k for k in range(offset, offset + per_team) if k not in used]
+            if free:
+                dst[i] = free[int(rng.integers(len(free)))]
+        # several bench players can share a slot: the one that is on the pitch keeps it
+        row = np.full((p["n_slots"], 2), np.nan)
+        ok = ~np.isnan(pl[t, :, 0])
+        row[dst[ok]] = pl[t, src[ok]]
+        out[t] = row
+    return {"players": out.astype(np.float32), "team": out_team, "ball": ball.astype(np.float32)}

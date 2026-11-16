@@ -1,2 +1,11 @@
+# Python 3.9 - 3.12. Exact versions: they are what makes the submission file reproducible.
 numpy==2.0.2
 pandas==2.3.3
+scikit-learn==1.6.1
+scipy==1.13.1
+joblib==1.5.3
+threadpoolctl==3.7.0
+python-dateutil==3.0.0
+pytz==2026.5
+tzdata==2026.5
+six==1.17.0

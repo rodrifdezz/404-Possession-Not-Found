@@ -34,6 +34,19 @@ def asset(name):
     return os.path.join(DATA_DIR, "tactical", STEM + suffix)
 
 
+# ---------------------------------------------------------------- evidence
+# Where the per-frame evidence handed to the decoder comes from:
+#   "model"  gradient-boosting model fitted on external matches (src/model.py,
+#            bench/train_model.py). It uses the tracking only (no Smart Tagging).
+#   "rules"  hand-weighted rules (src/dead.py, src/team.py) plus Smart Tagging: the v2 system.
+# Chosen on external matches only (docs/BENCH_MODEL.md), never on the challenge match.
+EVIDENCE = "model"
+
+# Decoder costs used with the model evidence (the rules keep the ones in PARAMS). Chosen on the
+# external bench (python -m bench.train_model --cv -> docs/BENCH_MODEL_CV.md), never on the
+# challenge match.
+MODEL_COSTS = {"switch_cost": 6.0, "dead_cost": 48.0}
+
 # ---------------------------------------------------------------- parameters
 # Set from physical reasoning or on the external bench, NEVER tuned against the public ground
 # truth (forbidden). Every change must be justified and logged in docs/JOURNAL.md.

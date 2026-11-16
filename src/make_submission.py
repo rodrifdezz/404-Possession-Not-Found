@@ -1,10 +1,16 @@
 """One command: data -> validated submission CSV.
 
-    python -m src.make_submission              # writes outputs/<TEAM_NAME>.csv
-    python -m src.make_submission --name my_try   # another name, to compare versions
+    python -m src.make_submission                    # writes outputs/<TEAM_NAME>.csv
+    python -m src.make_submission --name my_try      # another name, to compare versions
+    python -m src.make_submission --evidence rules   # the rule-based system (v2) instead
+
+The evidence source is config.EVIDENCE unless --evidence is given. The file is fully determined
+by the data bundle and this repository: the md5 printed at the end must be the same on every
+machine.
 """
 
 import argparse
+import hashlib
 import os
 import subprocess
 import sys
@@ -40,7 +46,7 @@ def summary(labels):
 
 def write_csv(labels, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as fh:
+    with open(path, "w", newline="\n") as fh:      # same bytes on Windows, macOS and Linux
         fh.write("frame,label\n")
         fh.writelines("{},{}\n".format(i, l) for i, l in enumerate(labels))
 
@@ -58,20 +64,29 @@ def validate(path):
         raise ValidationError("the official validator rejects {}".format(path))
 
 
-def run(name):
-    labels = pipeline.predict(load.load_atd(), load.load_smart_tagging())
+def md5(path):
+    with open(path, "rb") as fh:
+        return hashlib.md5(fh.read()).hexdigest()
+
+
+def run(name, source=None):
+    source = C.EVIDENCE if source is None else source
+    labels = pipeline.predict(load.load_atd(), load.load_smart_tagging(), source=source)
     path = os.path.join(C.OUT_DIR, name + ".csv")
     write_csv(labels, path)
-    print("written", os.path.relpath(path, C.ROOT))
+    print("written {} (evidence: {})".format(os.path.relpath(path, C.ROOT), source))
     summary(labels)
     validate(path)
+    print("md5 {}  (must be identical on every machine)".format(md5(path)))
     return path
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--name", default=C.TEAM_NAME)
+    ap.add_argument("--evidence", choices=pipeline.SOURCES, default=None)
+    args = ap.parse_args()
     try:
-        run(ap.parse_args().name)
+        run(args.name, args.evidence)
     except ValidationError as error:
         sys.exit("ERROR: {}".format(error))

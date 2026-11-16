@@ -69,3 +69,41 @@ One entry per change. Date · who · what · why · effect on the full match
 - Limit: the absolute bench level is low (~0.29). Tuning the decoder is done; the remaining margin
   is in the evidence (`dead.py`, `team.py`), especially dead-ball detection. Any new rule must be
   validated on the bench before being kept.
+
+## 2026-11-16 · v3: learned evidence (gradient boosting) replaces the hand-weighted rules
+- Why: v2 plateaued at 0.29 on the IDSSE bench, close to the official baseline. The decoder was
+  tuned; the limit was the evidence (hand-set weights in `dead.py` / `team.py`).
+- What: `src/frame_features.py` (~90 tracking features per frame, one block per team plus a global
+  one, with past / future / centred windows; no player identities, no Smart Tagging),
+  `src/model.py` + `src/stack.py` (two stacked HistGradientBoosting layers -> P(H, A, D)), handed
+  to the same decoder as before through `model.to_evidence` (exactly the same probabilities).
+  `EVIDENCE = "model"` in `src/config.py`; `"rules"` still reproduces v2.
+- Training data: the 3 Metrica open sample matches (`bench/metrica.py`; labels derived by code
+  from their events, touches < 0.5 s given back). Seven degradations per match
+  (`bench/train_model.py`: Markov presets normal / easy / hard, the two bench scenarios, ball
+  visible or not during stoppages). Nothing from the challenge match.
+- Validation (`python -m bench.train_model --cv`, `docs/BENCH_MODEL_CV.md`): both layers fitted on
+  two matches and scored on the third with the protocol of `bench/run.py` (2 scenarios x 2 seeds
+  x 2 readings of the truth, official scorer). spellF1: official baseline 0.238, rules v2 0.362,
+  **model 0.689** (0.689 / 0.715 / 0.663; better than the rules on every match by 0.26-0.37).
+  macroF1 0.50 -> 0.90.
+- Decoder costs for the model, chosen by that bench and applied as they came: **switch 6,
+  dead 48** (flat optimum: top 8 configs within 0.004).
+- Smart Tagging dropped from the submitted system: it cannot be validated on external matches,
+  and with it the bench would not be scoring what we submit.
+- Fixes found on the way: `make_submission` now writes `\n` line endings on every OS (on Windows
+  the CSV had `\r\n`, so the md5 differed between machines) and prints the md5; dependencies fully
+  pinned (scikit-learn added); `frame_features.orientation` made symmetric outside the halves
+  (caught by the new team-swap test).
+- Reproducibility: the full-size synthetic match gives the same md5 on Python 3.9, 3.12 and
+  3.13 (Linux), twice each.
+- Honest caveat: on the toy simulator (`tools/make_fake_data.py`) the rules score higher than the
+  model (spellF1 0.81 vs 0.55). The toy is built on the rules' own assumptions (ball glued 0.6 m
+  from its carrier, ball parked off the pitch when dead, players jittering in place), so it says
+  nothing about football; it stays a plumbing check. It does show that the model is not immune to
+  a change of domain, which is why the IDSSE check below matters.
+- Not looked at: the public 5 minutes.
+- To be logged by whoever runs it on the challenge match: the `make_submission` summary and md5
+  on two machines (macOS + Windows), and `python -m bench.run --evidence model` on the 7 IDSSE
+  matches (independent check on another league; the model has never seen them).
+- Decision: adopted (`EVIDENCE = "model"`), subject to the two checks above.
