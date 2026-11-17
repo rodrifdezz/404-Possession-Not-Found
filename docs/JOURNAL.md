@@ -125,3 +125,54 @@ One entry per change. Date · who · what · why · effect on the full match
   MD5: `d5484211b83141ac50ae7d101de57fae`.
 - Cross-machine MD5 verification remains pending.
 - Decision: retain v3 without changing its model or parameters.
+
+## 2026-11-17 · JAN · v4: touch detector, 10 external matches (branch JAN_v4_ablaciones)
+
+- Ablation bench `bench/v4.py`, over 10 external matches (3 Metrica, 7 DFL). The matches are
+  split into 5 folds of 2 whole matches; each fold is scored by models fitted on the other 8.
+  Every candidate gets the same degradations and seeds, so the results are paired. An adoption
+  rule was fixed in `bench/v4_report.py` before any result. Full results: `docs/BENCH_V4.md`.
+  - V4-A, the v3 recipe on the 10 matches: +0.040 spellF1 over v3.
+  - V4-B, adding possession-change features to layer 2: +0.001 over V4-A. Rejected.
+  - V4-C, adding the touch features of `src/touch_features.py` to layer 1: +0.019 over V4-A,
+    better on 10 / 10 matches.
+  - V4-D, both: no better than V4-C.
+- Every candidate failed the false-switch condition: false direct H↔A changes may rise by at
+  most 20 % over v3, and V4-C raised them by 23 %.
+- Diagnosis (`bench/v4_fix.py`): about 3/4 of the false changes are real changes placed 2-10 s
+  away. The increase comes in possessions under 2 s, with the ball visible and a touch nearby,
+  i.e. touches without control. Most of the increase comes from training on 10 matches, not from
+  the touch features.
+- One correction tested: the decoder's `switch_cost`. It was chosen by nested validation: for each
+  outer fold, only out-of-sample predictions on its 8 training matches were used. The choices
+  were 9, 9, 8, 9 and 8. Applied per fold, V4-C passes the unchanged rule against v3:
+  - spellF1 0.608 → 0.667, 10 / 10 wins, worst match +0.033;
+  - false changes +8.6 %;
+  - short possessions recovered 27.8 % → 36.2 %.
+- Limitations (`docs/BENCH_V4_FIX.md`, `docs/TECHNICAL.md` §7):
+  - false changes +27 % on the Metrica matches, against +2 % on DFL;
+  - inner-stacking approximation of the nested choice;
+  - the same folds were used to compare the four candidates, so 0.667 is slightly optimistic;
+  - all figures are on external matches: none is a score on the challenge match (public window
+    or private result).
+- Final model: V4-C fitted on all 10 matches (`python -m bench.v4_final`, 34 min). It is
+  `models/possession_v4c.pkl` (md5 `4ec3a3c1c401564439cfc7c545b02c5d`, 5.1 MB, 107 features),
+  with decoder costs `switch_cost = 9` (median of the inner choices) and `dead_cost = 48`.
+- Integration:
+  - `config.MODEL_VERSION = "v4c"`, with `config.MODELS` holding the file and the costs of each
+    model;
+  - `python -m src.make_submission` generates v4;
+  - `--model v3` regenerates v3, still md5 `d5484211b83141ac50ae7d101de57fae`;
+  - inference needs only `src/`, the committed model and the official data; no external match
+    and no `bench/` module.
+- Challenge match, checked for gross errors only (nothing was tuned on it, and the public
+  5 minutes were not looked at):
+  - `Valid.`, 199,319 rows;
+  - 277 possessions (v3: 296), mean 11.6 s (v3: 10.9 s);
+  - H / A / D 31.6 / 19.0 / 49.4 %, as with v3;
+  - 142 direct H↔A changes (v3: 159);
+  - 5.3 % of the graded frames get a different label from v3.
+- MD5 `ad30bb9305e408ce2cde485fea822e17`, identical on two Windows runs. Cross-machine check
+  pending.
+- Decision: v4 prepared as the default. Submitting it instead of v3 is pending the team's
+  approval.

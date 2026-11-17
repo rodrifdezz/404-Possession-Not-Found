@@ -4,10 +4,15 @@
            (src/frame_features.py)
   layer 2  HistGradientBoostingClassifier on the sequence of layer-1 probabilities (src/stack.py)
 
-Both are fitted by bench/train_model.py ONLY on public matches of other teams (the Metrica Sports
-open sample data), with their tracking degraded to resemble the automatic tracking of the
-challenge. No labelled data of the challenge match is used. The fitted model is
-models/possession_hgb.pkl (it holds no match data) and models/possession_hgb.json describes it.
+Both are fitted ONLY on public matches of other teams, with their tracking degraded to resemble
+the automatic tracking of the challenge. No labelled data of the challenge match is used. The
+fitted models (config.MODELS) hold no match data; a .json next to each describes it:
+
+  models/possession_v4c.pkl  v4 (submitted): 3 Metrica + 7 IDSSE/DFL matches, layer 1 also gets
+                             the touch features (src/touch_features.py); bench/v4_final.py
+  models/possession_hgb.pkl  v3: 3 Metrica matches; bench/train_model.py
+
+A model needs the touch features if its feature names end with them (uses_touch()).
 
 Both layers are symmetric: the prediction is averaged with the one obtained after swapping the
 teams, so the model cannot favour home or away.
@@ -23,24 +28,53 @@ import numpy as np
 
 from . import ball as ball_mod
 from . import config as C
-from . import frame_features, stack
+from . import frame_features, stack, touch_features
 
-MODEL_PATH = os.path.join(C.ROOT, "models", "possession_hgb.pkl")
 DECIMALS = 3      # inputs are rounded: same decisions on macOS, Linux and Windows
 P_FLOOR = 1e-4    # no state is ever ruled out by a single frame
+
+
+def check_version(version=None):
+    """A version of config.MODELS (None = config.MODEL_VERSION); ValueError if unknown."""
+    version = C.MODEL_VERSION if version is None else version
+    if version not in C.MODELS:
+        raise ValueError("unknown model version {!r}; choose one of {}".format(
+            version, sorted(C.MODELS)))
+    return version
+
+
+def model_path(version=None):
+    """models/<file> of a version of config.MODELS (None = config.MODEL_VERSION)."""
+    return os.path.join(C.ROOT, "models", C.MODELS[check_version(version)]["file"])
+
+
+MODEL_PATH = model_path("v3")     # written by bench/train_model.py
 
 _CACHE = {}
 
 
 def load(path=None):
-    path = MODEL_PATH if path is None else path
+    path = model_path() if path is None else path
     if path not in _CACHE:
         if not os.path.isfile(path):
-            raise FileNotFoundError("Model {} is missing. Fit it with: python -m bench.train_model"
-                                    .format(path))
+            raise FileNotFoundError("Model {} is missing (it is committed; refit with "
+                                    "bench/v4_final.py or bench/train_model.py)".format(path))
         with open(path, "rb") as fh:
             _CACHE[path] = pickle.load(fh)
     return _CACHE[path]
+
+
+def load_version(version=None):
+    """The fitted model of a version. A model that stores its decoder costs (v4) must agree with
+    config.MODELS, so that editing one without the other cannot silently change the output."""
+    version = check_version(version)
+    bundle = load(model_path(version))
+    stored = bundle.get("costs")
+    if stored is not None and dict(stored) != C.MODELS[version]["costs"]:
+        raise ValueError("model {} was fitted for decoder costs {} but config.MODELS[{!r}] has {}"
+                         .format(model_path(version), stored, version,
+                                 C.MODELS[version]["costs"]))
+    return bundle
 
 
 def prepare(X):
@@ -68,8 +102,10 @@ def predict_proba(X, names, bundle=None):
     """(N,3) probabilities [H, A, D]."""
     bundle = load() if bundle is None else bundle
     if list(bundle["names"]) != list(names):
-        raise ValueError("The features do not match the fitted model: refit it "
-                         "(python -m bench.train_model).")
+        raise ValueError("The features do not match the fitted model ({} computed, {} expected; "
+                         "with touch features: {}). Refit it (bench/v4_final.py for v4, "
+                         "bench/train_model.py for v3).".format(
+                             len(names), len(bundle["names"]), uses_touch(bundle)))
     P1 = stage1(bundle["stage1"], X, names)
     if bundle.get("stage2") is None:
         return P1
@@ -85,15 +121,28 @@ def to_evidence(proba):
     return team_llr, dead_logit
 
 
-def matrix(atd, p, pitch, halves):
+def matrix(atd, p, pitch, halves, touch=False):
+    """Features of every frame. With touch=True the touch features are appended and the frame
+    features are stored as float32 first, exactly as the v4 model saw them when it was fitted."""
     ball_xy, _ = ball_mod.clean_ball(atd["ball"], p)
-    return frame_features.compute(atd, ball_xy, halves, pitch=pitch)
+    X, names = frame_features.compute(atd, ball_xy, halves, pitch=pitch)
+    if not touch:
+        return X, names
+    T, tnames = touch_features.features(atd)
+    return np.hstack([np.asarray(X, dtype=np.float32), T]), list(names) + list(tnames)
+
+
+def uses_touch(bundle):
+    k = len(touch_features.NAMES)
+    return list(bundle["names"])[-k:] == list(touch_features.NAMES)
 
 
 def evidence(atd, p=None, pitch=None, halves=None, bundle=None):
-    """Tracking -> (team_llr, dead_logit) per frame. None = challenge match values (config)."""
+    """Tracking -> (team_llr, dead_logit) per frame. None = challenge match values (config) and
+    the submitted model."""
     p = C.PARAMS if p is None else p
     pitch = C.PITCH if pitch is None else pitch
     halves = C.HALVES if halves is None else halves
-    X, names = matrix(atd, p, pitch, halves)
+    bundle = load_version() if bundle is None else bundle
+    X, names = matrix(atd, p, pitch, halves, touch=uses_touch(bundle))
     return to_evidence(predict_proba(X, names, bundle))

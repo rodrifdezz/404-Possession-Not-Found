@@ -153,7 +153,7 @@ def cross_validate(matches, data, quick):
                       os.path.join(C.OUT_DIR, "bench", "results_model_cv{}.json".format(suffix)),
                       reference, "model", "metrica", note, "python -m bench.train_model --cv")
     log("best decoder costs for the model evidence:", run.fmt(best))
-    log("-> copy them into MODEL_COSTS in src/config.py")
+    log('-> copy them into MODELS["v3"]["costs"] in src/config.py')
 
 
 def main(argv=None):

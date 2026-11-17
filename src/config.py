@@ -42,10 +42,17 @@ def asset(name):
 # Chosen on external matches only (docs/BENCH_MODEL.md), never on the challenge match.
 EVIDENCE = "model"
 
-# Decoder costs used with the model evidence (the rules keep the ones in PARAMS). Chosen on the
-# external bench (python -m bench.train_model --cv -> docs/BENCH_MODEL_CV.md), never on the
-# challenge match.
-MODEL_COSTS = {"switch_cost": 6.0, "dead_cost": 48.0}
+# Fitted models of the "model" evidence (models/<file>) and the decoder costs that go with each
+# (the rules keep the ones in PARAMS). All chosen on external matches, never on the challenge match.
+#   v4c  3 Metrica + 7 DFL matches, with the touch features (src/touch_features.py); fitted by
+#        python -m bench.v4_final; costs from nested validation (docs/BENCH_V4_FIX.md)
+#   v3   3 Metrica matches, fitted by python -m bench.train_model; costs from
+#        docs/BENCH_MODEL_CV.md. Regenerates the previous submission.
+MODELS = {
+    "v4c": {"file": "possession_v4c.pkl", "costs": {"switch_cost": 9.0, "dead_cost": 48.0}},
+    "v3": {"file": "possession_hgb.pkl", "costs": {"switch_cost": 6.0, "dead_cost": 48.0}},
+}
+MODEL_VERSION = "v4c"      # the submitted one
 
 # ---------------------------------------------------------------- parameters
 # Set from physical reasoning or on the external bench, NEVER tuned against the public ground
