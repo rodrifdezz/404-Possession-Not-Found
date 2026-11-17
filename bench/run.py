@@ -45,6 +45,9 @@ GRID = {
 QUICK_GRID = {"switch_cost": [8, 16], "dead_cost": [6, 48]}
 V1 = {"switch_cost": 8.0, "dead_cost": 6.0}
 SEEDS = [0, 1]
+# The model scored by --evidence model: v3, fitted on Metrica only, so the DFL matches are unseen.
+# (v4 was fitted on these DFL matches; it is scored out of sample by bench/v4.py.)
+MODEL_VERSION = "v3"
 
 
 def configs(grid):
@@ -90,7 +93,8 @@ def run_match(m, cfgs, seeds, log=print, source="rules", reference=False, eviden
         if evidence is not None:
             team_llr, dead_logit = evidence(d, m)
         else:
-            team_llr, dead_logit = pipeline.evidence(d, [], None, m["pitch"], m["halves"], source)
+            team_llr, dead_logit = pipeline.evidence(d, [], None, m["pitch"], m["halves"], source,
+                                                     MODEL_VERSION)
         preds = decode_grid(team_llr, dead_logit, m["halves"], cfgs)
         for name, gt in truth.items():
             out[(scenario, seed, name)] = [score(gt, p) for p in preds]

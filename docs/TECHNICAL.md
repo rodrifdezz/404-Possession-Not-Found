@@ -14,13 +14,15 @@ Command that regenerates the file: `python -m src.make_submission`
 We treat possession as **sequence labelling with a strong temporal prior**, in two parts:
 
 1. **Per-frame evidence.** A gradient-boosting model, in two stacked layers, turns about 90
-   features of the automatic tracking into the probability that a frame is `H` (home in
-   possession), `A` (away in possession) or `D` (dead ball).
+   features of the automatic tracking, plus 18 features from an explicit ball-touch detector, into
+   the probability that a frame is `H` (home in possession), `A` (away in possession) or `D`
+   (dead ball).
 2. **Decoding.** A three-state Viterbi decoder with a cost for every change of state turns those
    probabilities into whole possessions, one half at a time.
 
-The model is fitted **only on public matches of other teams**, whose clean tracking we damage on
-purpose until it looks like the automatic tracking of the challenge. Nothing in the pipeline is
+The model (v4) is fitted **only on public matches of other teams**: 3 Metrica Sports sample
+matches and 7 IDSSE / DFL Bundesliga matches. Their clean tracking is damaged on purpose until it
+looks like the automatic tracking of the challenge. Nothing in the pipeline is
 fitted, tuned or selected on the challenge match: no hand label, no correction, no constant tied
 to what happens in it, and the public five minutes were used only to check that the pipeline is
 wired correctly (frames aligned, file well-formed).
@@ -53,6 +55,7 @@ wired correctly (frames aligned, file well-formed).
 | read | `src/load.py` | ATD text + metadata → positions in metres; `video_frame = frame_id − 1` |
 | ball cleaning | `src/ball.py` | linear interpolation of ball gaps of at most 0.6 s |
 | features | `src/frame_features.py` | about 90 per frame: one block per team (each in its own attacking direction), one global block, and their past / future / centred windows up to 10 s |
+| touches | `src/touch_features.py` | touch detector on the raw ball → 18 features: time since / until a touch, team of the last / next touch, balance of touches per team over 2 s and 5 s, change of team between touches, ball visibility around the frame |
 | layer 1 | `src/model.py` | histogram gradient boosting → P(H), P(A), P(D) per frame |
 | layer 2 | `src/stack.py` | histogram gradient boosting on the *sequence* of layer-1 probabilities (rolling mean / min / max over 0.2–6 s, values up to ±2 s away) |
 | decoding | `src/hmm.py` | Viterbi over H / A / D with `switch_cost` (H↔A) and `dead_cost` (alive↔dead), each half on its own |
@@ -66,6 +69,17 @@ most advanced player, players behind the ball, mean speed and mean velocity alon
 direction. Global: ball speed and acceleration (a touch signature), distance of the ball to the
 lines, how long the ball has been still, time since / until the ball is seen, mean speed of all
 players, number of tracked objects.
+
+**Touch detector.** A touch is a change of the ball's velocity of at least 4 m/s (about 3 times
+the tracking noise), measured over 4 frames on each side of the raw, lightly smoothed ball. It
+also needs a player within 2.5 m, and it goes to the team of the nearest player. Touches closer
+than 8 frames are merged. A touch is only detected where every frame of its window is observed,
+so the edge of a ball gap, where an interpolation would show a fake kink, can never produce one.
+The thresholds come from physics and the tracking noise and were fixed before any experiment.
+Measured on the external matches only, the team of a touch agrees with the team in possession
+0.5 s later 95–97 % of the time on clean tracking and 90 % on degraded tracking. Without the
+ball the detector sees nothing: the touch features then only say how long ago the last touch
+was.
 
 **Symmetry.** Home and away are interchangeable: every team feature exists once per side, the
 training set is augmented by swapping the teams, and both layers average each prediction with the
@@ -101,10 +115,11 @@ None of it comes from the provided match.
 
 | dataset | used for | matches | labels | who produced the labels |
 |---|---|---|---|---|
-| Metrica Sports open sample data (`github.com/metrica-sports/sample-data`, published 2020–21, anonymised) | fitting the model; validating it leave-one-match-out | 3 (283 graded minutes, 1,034 possessions) | per-frame H / A / D derived **by code** from the event files (7,300 events: passes, recoveries, balls out, fouls, set pieces…) | events annotated by Metrica Sports; conversion to per-frame labels by us (`bench/metrica.py`) |
-| IDSSE / DFL (Bassek et al., *Scientific Data* 12, 195, 2025, CC BY 4.0) | choosing the decoder costs of the rule-based system; independent check of the model on another league | 7 Bundesliga matches | the per-frame `BallStatus` / `BallPossession` flags of the official DFL tracking | DFL / Sportec Solutions (shipped with the data) |
+| Metrica Sports open sample data (`github.com/metrica-sports/sample-data`, published 2020–21, anonymised) | fitting the model; validating it with whole matches held out | 3 (283 graded minutes, 1,034 possessions) | per-frame H / A / D derived **by code** from the event files (7,300 events: passes, recoveries, balls out, fouls, set pieces…) | events annotated by Metrica Sports; conversion to per-frame labels by us (`bench/metrica.py`) |
+| IDSSE / DFL (Bassek et al., *Scientific Data* 12, 195, 2025, CC BY 4.0) | fitting the model (v4); validating it with whole matches held out; decoder costs of the rule-based system | 7 Bundesliga matches | the per-frame `BallStatus` / `BallPossession` flags of the official DFL tracking | DFL / Sportec Solutions (shipped with the data) |
 
-We labelled nothing by hand, on any match.
+We labelled nothing by hand, on any match. The external data is downloaded by our scripts from
+its original sources and is not redistributed in the repository.
 
 **From events to labels (Metrica).** Possession is the team of the last control event (pass, set
 piece, shot, recovery, ball lost, carry). The ball is dead from the event that stops play (ball
@@ -129,36 +144,50 @@ as above, averaged over two gap-length scenarios, two random seeds and two readi
 (the labels as they are, and with touches shorter than 2 s between two spells of the opponent
 given back to it).
 
-**Model, on matches it has never seen** (Metrica sample matches, leave-one-match-out: both layers
-fitted on two matches, scored on the third; degradation seeds different from the training ones):
+**Submitted system (v4), on matches it has never seen.** The 10 external matches are split into
+5 folds of 2 whole matches. Each fold is scored by models fitted on the other 8 matches, in both
+layers. Every candidate sees the same degraded inputs, so the comparisons are paired
+(`docs/BENCH_V4.md`, `docs/BENCH_V4_FIX.md`).
 
-| match left out | official baseline | our rules (v2) | **submitted system** |
-|---|---|---|---|
-| Metrica 1 | 0.235 | 0.336 | **0.689** |
-| Metrica 2 | 0.239 | 0.350 | **0.715** |
-| Metrica 3 | 0.241 | 0.402 | **0.663** |
-| **mean** | **0.238** | **0.362** | **0.689** |
+| | v3 (previous) | **v4 (submitted)** |
+|---|---|---|
+| spellF1, mean of 10 held-out matches | 0.608 | **0.667** (better on 10 / 10) |
+| Metrica (3) / DFL (7) | 0.695 / 0.571 | 0.736 / 0.638 |
+| macroF1 | 0.888 | 0.911 |
+| possessions under 5 s recovered | 27.8 % | 36.2 % |
+| false direct H↔A changes per 90 min | 33.3 | 36.1 (+8.6 %) |
 
-Frame-level macroF1 goes from 0.50 (rules) to 0.90, and the predicted number of possessions is
-256 per match against 317 true ones (the rules predict 304, but in the wrong places).
+v3 is the stored v3 model on the DFL matches. On a Metrica match it is the same recipe fitted on
+the two other Metrica matches.
 
-**Decoder costs.** `switch_cost = 6`, `dead_cost = 48` (nats), chosen on the same leave-one-out
-predictions. The optimum is flat: the eight best settings are within 0.004 spellF1 of each other
-(`docs/BENCH_MODEL_CV.md`), so the result does not hinge on fine tuning.
+**How v4 was chosen.** The two improvements were tested as ablations on the same folds, and an
+adoption rule was fixed before seeing any result. A candidate had to:
 
-**Rule-based system, for reference** (IDSSE / DFL matches, `docs/BENCH.md`): 0.261 with the
-initial costs, 0.294 after choosing them leave-one-match-out on the seven matches. That plateau,
-close to the baseline, is what made us replace the hand-set weights with a fitted model.
+* win on average, overall and for each provider;
+* win on at least 70 % of the matches;
+* lose no more than 0.03 on any match;
+* raise false H↔A changes by at most 20 %.
 
-**Adoption criterion.** The learned evidence replaces the rules only if it beats them on every
-left-out external match. It does, by 0.26 to 0.37.
+Training on all 10 matches gave +0.040. The touch features added +0.019 on top of that, winning
+on all 10 matches. Possession-change features in layer 2 added nothing (+0.001), so they were
+dropped.
 
-The official baseline (nearest player plus a ±2 s majority vote) scores 0.243 on the full
-challenge match (EVALUATION.md) and 0.238 on our degraded external matches, which suggests the two
-are of comparable difficulty. Even so, these numbers describe other matches: the score on the
-challenge match will differ.
+With the v3 decoder costs, the touch model raised false changes by 23 % and was rejected. Three
+quarters of those false changes are real changes placed 2–10 s away from the true one. The rest
+are reactions to touches without control.
 
-**Independent validation on a second provider (IDSSE / DFL).** The stored v3 classifier, trained on three Metrica sample matches, was evaluated on seven unseen Bundesliga matches with artificially degraded tracking. Mean spellF1 improved from **0.296 (rules v2)** to **0.571 (model v3)**, outperforming the rules on all seven matches. MacroF1 improved from 0.496 to 0.883. Leave-one-match-out decoder selection returned `switch_cost = 6` and `dead_cost = 48`, matching the existing configuration. No model or parameter changes were made. Full results: `docs/BENCH_MODEL.md`. These are external validation results, not a score on the challenge match.
+The single correction tested was the cost of a direct H↔A change in the decoder. It was chosen
+inside each fold from the 8 training matches only, never from the held-out pair. The five folds
+chose 9, 9, 8, 9 and 8. Applied that way, the model passes all four conditions. The submitted
+costs are the median of the five choices: **`switch_cost = 9`, `dead_cost = 48`** (nats).
+
+**History.** v3, fitted on the 3 Metrica matches only, scored 0.689 leave-one-match-out on them
+and 0.571 on the 7 DFL matches it never saw (`docs/BENCH_MODEL_CV.md`, `docs/BENCH_MODEL.md`). Our
+hand-written rules (v2) scored 0.362 and 0.296; that plateau, close to the baseline, is why we
+moved to a fitted model. The official baseline (nearest player plus a ±2 s majority vote) scores
+0.243 on the full challenge match (EVALUATION.md) and 0.238 on our degraded external matches. All
+these numbers describe other matches. None of them is a score on the challenge match, either its
+public window or the private result; that score will differ.
 
 ## 6. Possession rules implemented
 
@@ -181,17 +210,23 @@ challenge match will differ.
 * **Domain gap.** The model learns from clean tracking that we damaged ourselves. The real
   automatic tracking may fail in ways no simulation reproduces (false ball detections, duplicated
   players, systematic errors near the stands). Mixing degradations reduces the risk; it does not
-  remove it.
+  remove it. The touch detector depends on the ball being tracked, and it is the part most
+  exposed to that gap.
+* **Limits of the evaluation.** Ten external matches are few. The same five folds were used to
+  compare the four v4 candidates, so the 0.667 of the candidate we kept is slightly optimistic.
+  The decoder cost was chosen inside each fold. That inner selection used an approximation: the
+  inner layer 2 is fitted on layer-1 probabilities of models that had seen the match being
+  predicted. This can only make the chosen cost worse, never the held-out figures better.
+* **More false changes on Metrica-like tracking.** Overall, false direct H↔A changes rise by
+  8.6 % over v3. On the three Metrica matches they rise by **27 %** (28.6 → 36.3 per 90 min),
+  against 2 % on DFL; spellF1 still improves on each of those matches. Most of these false
+  changes are real changes placed a few seconds away, or reactions to touches without control.
 * **Event-derived labels.** The Metrica labels time a change of possession at the annotated
-  event, which can differ by a few frames from a tracking-derived ground truth, and three matches
-  are few. Fitting also on the seven DFL matches, whose flags are of the same kind as the
-  challenge ground truth, is the first thing we would do next.
-* **Short possessions** (under 2 s) are recovered much less often than long ones; most of them
-  happen while the ball is occluded.
+  event, which can differ by a few frames from a tracking-derived ground truth.
+* **Short possessions** (under 2 s) are still recovered far less often than long ones (19 %),
+  mostly because they happen while the ball is occluded, where the touch detector is blind.
 * **Smart Tagging is unused** because we could not validate it; with labelled matches that include
   it, set-piece tags would probably sharpen the restarts.
-* **No explicit touch detector.** Snapping each change of possession to the nearest detected touch
-  would improve the timing of the boundaries, which the metric rewards.
 
 ## 8. Reproduction
 
@@ -205,13 +240,16 @@ python -m src.make_submission     # -> outputs/404-possession-not-found.csv (val
 python -m unittest discover -s tests -v
 ```
 
-The fitted model is in `models/`. Refitting and re-running the validation are optional and need
-only public data:
+Expected md5: `ad30bb9305e408ce2cde485fea822e17` (v4). The fitted models are in `models/`
+(`possession_v4c.pkl`, submitted; `possession_hgb.pkl`, v3), so nothing is trained and no
+external match is needed to generate the file. `python -m src.make_submission --model v3 --name
+v3` regenerates the previous v3 file. Refitting and re-running the validation are optional and
+need only public data:
 
 ```bash
 python -m bench.metrica --download     # Metrica sample matches
-python -m bench.train_model --cv       # leave-one-match-out validation (section 5)
-python -m bench.train_model            # refit the stored model
 python -m bench.download               # IDSSE / DFL matches
-python -m bench.run --evidence model   # the stored model on the 7 DFL matches
+python -m bench.v4 --features          # degraded copies and their features (local cache)
+python -m bench.v4 --folds 0 1 2 3 4 --touch-diag --report   # held-out comparison (section 5)
+python -m bench.v4_final               # refit the submitted model on the 10 matches
 ```

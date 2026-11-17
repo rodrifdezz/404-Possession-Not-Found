@@ -14,25 +14,34 @@ Technical document: [`docs/TECHNICAL.md`](docs/TECHNICAL.md).
 |---|---|---|
 | 1. ball cleaning | `src/ball.py` | linear interpolation of short ball gaps |
 | 2. features | `src/frame_features.py` | ~90 per frame, from the tracking only: one block per team (distance and relative speed of its nearest players to the ball, shape and movement of the team), one global block (ball speed, ball near the lines, time since / until the ball is seen), and their past / future windows |
-| 3. evidence | `src/model.py`, `src/stack.py` | two stacked gradient-boosting layers → P(H), P(A), P(D) per frame |
-| 4. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs, decoded per half |
+| 3. touches | `src/touch_features.py` | explicit ball-touch detector (sharp change of the raw ball's velocity with a player within 2.5 m) → 18 features: time since / until a touch, team of the last / next touch, touch balance per team |
+| 4. evidence | `src/model.py`, `src/stack.py` | two stacked gradient-boosting layers → P(H), P(A), P(D) per frame |
+| 5. temporal model | `src/hmm.py` | 3-state (H/A/D) Viterbi with switching costs (switch 9, dead 48), decoded per half |
 
-The model is fitted on **public matches of other teams only** (Metrica Sports open sample data),
-with their tracking degraded to resemble the automatic tracking of the challenge. Nothing is
-fitted, tuned or selected on the challenge match: no hand annotation, no constant tied to specific
-frames, and the public ground truth is used only to check that the pipeline is wired correctly.
+The model (v4) is fitted on **public matches of other teams only**: 3 Metrica Sports sample
+matches and 7 IDSSE / DFL Bundesliga matches, with their tracking degraded to resemble the
+automatic tracking of the challenge. Nothing is fitted, tuned or selected on the challenge match:
+no hand annotation, no constant tied to specific frames, and the public ground truth is used only
+to check that the pipeline is wired correctly.
 
-On external matches the model has never seen, scored with the official code
-([`docs/BENCH_MODEL_CV.md`](docs/BENCH_MODEL_CV.md)):
+On the 10 external matches, each scored by models fitted on the other matches, with the official
+code ([`docs/BENCH_V4.md`](docs/BENCH_V4.md), [`docs/BENCH_V4_FIX.md`](docs/BENCH_V4_FIX.md)):
 
 | | spellF1 |
 |---|---|
-| official baseline (nearest player + majority vote) | 0.238 |
-| our rule-based system (v2, `EVIDENCE = "rules"`) | 0.362 |
-| **submitted system (`EVIDENCE = "model"`)** | **0.689** |
+| previous submission (v3: 3 Metrica matches, no touch features) | 0.608 |
+| **submitted system (v4: `python -m src.make_submission`)** | **0.667** (better on 10 / 10 matches) |
 
-The earlier rule-based system (`src/dead.py`, `src/team.py`, with Smart Tagging) is kept and can
-be run with `--evidence rules`.
+* Decoder costs of v4: `switch_cost = 9`, `dead_cost = 48`. The switch cost was chosen inside
+  each fold from its training matches only.
+* Cost of the gain: false direct H↔A changes rise by 8.6 % overall, and by 27 % on the Metrica
+  matches.
+* The four v4 variants were compared on the same folds, so the 0.667 is slightly optimistic.
+* None of these figures is a score on the challenge match (public window or private result).
+
+The official baseline scores 0.238 on our degraded Metrica matches and our first rule-based
+system 0.362 ([`docs/BENCH_MODEL_CV.md`](docs/BENCH_MODEL_CV.md)). v3 and the rule-based system
+(`src/dead.py`, `src/team.py`, with Smart Tagging) are kept: `--model v3` and `--evidence rules`.
 
 ## Reproduce
 
@@ -53,8 +62,11 @@ python -m src.make_submission        # -> outputs/404-possession-not-found.csv (
 python -m unittest discover -s tests -v
 ```
 
-`make_submission` exits with an error if the official validator rejects the CSV. The fitted model
-is in `models/`, so nothing is trained when the submission is generated.
+Expected md5: `ad30bb9305e408ce2cde485fea822e17`. `make_submission` exits with an error if the
+official validator rejects the CSV. The fitted models are in `models/`, so nothing is trained and
+no external match is needed when the submission is generated.
+`python -m src.make_submission --model v3 --name v3` regenerates the previous (v3) file,
+md5 `d5484211b83141ac50ae7d101de57fae`.
 
 Different locations: `MTAH_REPO=/path/to/official/repo` and/or `MTAH_DATA_DIR=/path/to/data`.
 
@@ -68,12 +80,19 @@ reports are in the repository).
 
 ```bash
 python -m bench.metrica --download     # 3 Metrica sample matches into external/metrica/ (~250 MB)
+python -m bench.download               # 7 IDSSE / DFL matches into external/idsse/ (~2.6 GB)
+
+# v4 (submitted): held-out comparison on the 10 matches, correction, refit (several hours)
+python -m bench.v4 --features          # degraded copies + features, cached in outputs/v4/
+python -m bench.v4 --folds 0 1 2 3 4 --touch-diag --report   # -> docs/BENCH_V4.md
+python -m bench.v4_fix --proba --diagnose --inner 0 1 2 3 4 --select   # -> docs/BENCH_V4_FIX.md
+python -m bench.v4_final               # refit models/possession_v4c.pkl
+
+# v3 and the rule-based system
 python -m bench.train_model --cv       # leave-one-match-out validation -> docs/BENCH_MODEL_CV.md
 python -m bench.train_model            # refit models/possession_hgb.pkl
-
-python -m bench.download               # 7 IDSSE / DFL matches into external/idsse/ (~2.6 GB)
 python -m bench.run                    # decoder costs of the rule-based system -> docs/BENCH.md
-python -m bench.run --evidence model   # the stored model on those 7 matches -> docs/BENCH_MODEL.md
+python -m bench.run --evidence model   # v3 on the 7 DFL matches -> docs/BENCH_MODEL.md
 ```
 
 * **Metrica Sports sample data** (`github.com/metrica-sports/sample-data`): tracking plus
@@ -103,8 +122,8 @@ python -m src.evaluate --gt fake_data/fake_gt.csv
 
 | path | content |
 |---|---|
-| `src/` | the pipeline (`load` → `ball` → `frame_features` → `model` + `stack` → `hmm`), `make_submission`, `evaluate`; `dead`, `team`, `features` are the rule-based evidence |
-| `models/` | fitted model (`.pkl`) and its description (`.json`) |
+| `src/` | the pipeline (`load` → `ball` → `frame_features` + `touch_features` → `model` + `stack` → `hmm`), `make_submission`, `evaluate`; `dead`, `team`, `features` are the rule-based evidence |
+| `models/` | fitted models (`.pkl`) and their descriptions (`.json`): `possession_v4c` (submitted), `possession_hgb` (v3) |
 | `bench/` | external data readers, degradation, validation and fitting |
 | `tests/` | unit and integration tests on synthetic data |
 | `docs/` | technical document, bench reports, experiment journal, team guide |

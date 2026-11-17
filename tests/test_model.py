@@ -83,11 +83,16 @@ class EvidenceTest(unittest.TestCase):
 
     def test_each_source_has_its_own_costs(self):
         self.assertEqual(pipeline.params("rules")["switch_cost"], C.PARAMS["switch_cost"])
-        self.assertEqual(pipeline.params("model")["dead_cost"], C.MODEL_COSTS["dead_cost"])
+        for version, spec in C.MODELS.items():
+            p = pipeline.params("model", version=version)
+            self.assertEqual(p["switch_cost"], spec["costs"]["switch_cost"])
+            self.assertEqual(p["dead_cost"], spec["costs"]["dead_cost"])
+        self.assertEqual(pipeline.params("model"), pipeline.params("model", version=C.MODEL_VERSION))
 
 
 @unittest.skipUnless(HAS_MODEL, "models/possession_hgb.pkl not found")
 class StoredModelTest(unittest.TestCase):
+    """The v3 model (models/possession_hgb.pkl), kept to regenerate the previous submission."""
 
     @classmethod
     def setUpClass(cls):
@@ -95,7 +100,7 @@ class StoredModelTest(unittest.TestCase):
         cls.halves = [(0, 699), (750, 1499)]
 
     def predict(self, atd):
-        return pipeline.predict(atd, [], None, PITCH, self.halves, "model")
+        return pipeline.predict(atd, [], None, PITCH, self.halves, "model", "v3")
 
     def test_labels(self):
         lab = self.predict(self.atd)
@@ -114,7 +119,7 @@ class StoredModelTest(unittest.TestCase):
 
     def test_probabilities_are_valid(self):
         X, names = model.matrix(self.atd, C.PARAMS, PITCH, self.halves)
-        P = model.predict_proba(X, names)
+        P = model.predict_proba(X, names, model.load(model.MODEL_PATH))
         self.assertEqual(P.shape, (len(X), 3))
         self.assertTrue(((P >= 0) & (P <= 1)).all())
         np.testing.assert_allclose(P.sum(axis=1), 1.0, atol=2e-4)
