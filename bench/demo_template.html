@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who has the ball? · 404 Possession Not Found</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Floodlit night: a broadcast graphics package for a possession model.
+     Every colour that means something is a token here; change them to restyle the page. */
+  :root {
+    --ink: #0c1411;          /* page background: night, slightly green */
+    --surface: #131d18;      /* panels */
+    --surface2: #19251f;     /* inner blocks */
+    --rule: #26352d;         /* borders and gridlines */
+    --chalk: #eef3ef;        /* main text */
+    --mist: #93a49a;         /* secondary text */
+    --dim: #5d6d64;          /* tertiary text */
+    --home: #f0533f;         /* home team (scene 1) */
+    --away: #3ba7f5;         /* away team (scene 1) */
+    --dead: #8a978f;         /* dead ball */
+    --lamp: #f4b63f;         /* floodlight amber: our model */
+    --grass1: #14361f; --grass2: #183d24; --chalkline: rgba(238,243,239,.62);
+    --barca: #2f6fd6;        /* scene 2: FC Barcelona (H) */
+    --athletic: #e2363a;     /* scene 2: Athletic Club (A) */
+    --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --body: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--chalk);
+    font: 15px/1.4 var(--body); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
+
+  /* The page is drawn on a fixed 1600x900 stage scaled to the window (good for recording). */
+  #wrap { position: fixed; inset: 0; overflow: hidden;
+    background: radial-gradient(1200px 700px at 30% 40%, #13251b 0%, var(--ink) 70%); }
+  #stage { position: absolute; left: 50%; top: 50%; width: 1600px; height: 900px;
+    margin: -450px 0 0 -800px; transform-origin: center center;
+    padding: 20px 26px 22px; display: grid; grid-template-rows: 64px minmax(0, 1fr); gap: 16px; }
+
+  /* ---------- top bar: identity, scorebug, scene switch ---------- */
+  header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; }
+  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .mono { flex: none; width: 56px; height: 46px; border-radius: 10px; display: grid; place-items: center;
+    background: var(--chalk); color: var(--ink); font: 800 20px/1 var(--display); letter-spacing: 0; }
+  .brand h1 { margin: 0; font: 700 30px/1 var(--display); letter-spacing: .005em; }
+  .brand p { margin: 4px 0 0; color: var(--mist); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand > div:last-child { min-width: 0; }
+
+  .bug { display: flex; align-items: stretch; height: 52px; border-radius: 8px; overflow: hidden;
+    background: var(--surface); box-shadow: 0 0 0 1px var(--rule); font-family: var(--display); }
+  .bug .poss { display: grid; grid-template-columns: auto 260px auto; align-items: center; gap: 12px; padding: 0 18px; }
+  .bug .side { font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; min-width: 50px; }
+  .bug .side.h { color: var(--home); text-align: right; } .bug .side.a { color: var(--away); }
+  .bug .bars { display: grid; gap: 4px; }
+  .bug .bar { position: relative; height: 9px; border-radius: 5px; overflow: hidden; background: var(--away); }
+  .bug .bar i { position: absolute; inset: 0 auto 0 0; background: var(--home); transition: width .25s linear; }
+  .bug .bar.truth { opacity: .55; height: 6px; }
+  .bug .cap { color: var(--mist); font: 600 12.5px/1 var(--body); text-align: center; }
+
+  .switch { justify-self: end; display: flex; padding: 4px; gap: 4px; border-radius: 10px;
+    background: var(--surface); box-shadow: 0 0 0 1px var(--rule); }
+  .switch button { border: 0; background: transparent; color: var(--mist); padding: 9px 14px;
+    border-radius: 7px; font-weight: 600; font-size: 14px; cursor: pointer; }
+  .switch button.on { background: var(--surface2); color: var(--chalk); box-shadow: inset 0 0 0 1px var(--rule); }
+  .switch button:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ---------- scenes ---------- */
+  .scene { display: none; min-height: 0; }
+  .scene.on { display: grid; }
+  #s1 { grid-template-columns: minmax(0, 1fr) 452px; grid-template-rows: minmax(0, 1fr) 150px; gap: 16px; }
+  .panel { background: var(--surface); border-radius: 14px; box-shadow: 0 0 0 1px var(--rule);
+    padding: 14px 18px; min-width: 0; min-height: 0; }
+  .panel h2 { margin: 0 0 10px; font: 600 15px/1.2 var(--body); color: var(--mist); }
+  .panel h2 b { color: var(--chalk); font-weight: 700; }
+  /* Canvases live in boxes of fixed size: a canvas never decides the size of the layout. */
+  .cbox { position: relative; min-height: 0; overflow: hidden; }
+  .cbox > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #pitchPanel { padding: 12px; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 12px; }
+  #pitchPanel .cbox { border-radius: 9px; }
+  .strip { display: flex; align-items: center; gap: 18px; padding: 0 6px; flex-wrap: wrap; }
+  .key { display: inline-flex; align-items: center; gap: 7px; color: var(--mist); font-size: 13.5px; font-weight: 500; }
+  .key i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .now { margin-left: auto; display: flex; gap: 8px; }
+  .tag { display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 11px; border-radius: 7px;
+    background: var(--surface2); box-shadow: 0 0 0 1px var(--rule); font-size: 13px; color: var(--mist); font-weight: 600; }
+  .lab { min-width: 58px; text-align: center; padding: 3px 8px; border-radius: 5px; color: #fff;
+    font: 700 13px/1.1 var(--display); letter-spacing: .06em; }
+  .lab.H { background: var(--home); } .lab.A { background: var(--away); }
+  .lab.D { background: var(--dead); } .lab.X { background: #2a332e; color: var(--dim); }
+  .tag.ours { box-shadow: 0 0 0 1px rgba(244,182,63,.55); color: var(--lamp); }
+
+  #side { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 16px; min-height: 0; }
+  .score { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .score .v { font: 800 48px/0.95 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .score .who { font-size: 13.5px; font-weight: 600; color: var(--mist); margin-bottom: 6px; }
+  .score .ours .v { color: var(--lamp); } .score .ours .who { color: var(--lamp); }
+  .score .base .v { color: var(--chalk); opacity: .82; }
+  .score .s { margin-top: 8px; color: var(--mist); font-size: 12.5px; font-variant-numeric: tabular-nums; line-height: 1.35; }
+  .delta { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--rule); color: var(--mist); font-size: 13px; }
+  .delta b { color: var(--lamp); font-family: var(--display); font-size: 17px; letter-spacing: .01em; }
+
+  .ribbonKey { display: flex; gap: 16px; margin-top: 8px; color: var(--mist); font-size: 12.5px; }
+  .ribbonKey i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+
+  #caption { font-size: 15px; line-height: 1.45; color: var(--chalk); max-width: 60ch; }
+  #caption strong { color: var(--lamp); font-weight: 700; }
+  .source { margin-top: 10px; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+
+  #bottom { grid-column: 1 / -1; display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 16px; min-height: 0; }
+  .transport { display: grid; align-content: center; gap: 8px; }
+  #play { height: 42px; border: 0; border-radius: 10px; background: var(--chalk); color: var(--ink);
+    font: 700 19px/1 var(--display); letter-spacing: .04em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  #play svg { width: 16px; height: 16px; }
+  .speeds { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .speeds button { height: 30px; border: 0; border-radius: 7px; background: var(--surface2); box-shadow: inset 0 0 0 1px var(--rule);
+    color: var(--mist); font: 700 15px/1 var(--display); cursor: pointer; }
+  .speeds button.on { color: var(--ink); background: var(--lamp); box-shadow: none; }
+  .hint { color: var(--dim); font-size: 12px; text-align: center; }
+  .time { display: flex; align-items: baseline; justify-content: center; gap: 6px; font-family: var(--display);
+    font-variant-numeric: tabular-nums; }
+  .time #clock { font-size: 24px; font-weight: 700; color: var(--chalk); }
+  .time #total { font-size: 16px; font-weight: 600; color: var(--dim); }
+  #timeline { cursor: pointer; }
+
+  /* ---------- scene 2 ---------- */
+  #s2 { grid-template-rows: auto auto minmax(0, 1fr); gap: 16px; align-content: start; }
+  .fixture { display: flex; align-items: center; gap: 18px; margin-bottom: 14px; }
+  .club { display: flex; align-items: center; gap: 10px; font: 700 24px/1 var(--display); }
+  .kit { width: 30px; height: 34px; border-radius: 6px 6px 9px 9px; box-shadow: 0 0 0 1px rgba(255,255,255,.18); }
+  .kit.barca { background: repeating-linear-gradient(90deg, #2f6fd6 0 6px, #a50044 6px 12px); }
+  .kit.athletic { background: repeating-linear-gradient(90deg, #e2363a 0 6px, #f4f4f4 6px 12px); }
+  .fixture .vs { color: var(--dim); font: 600 18px/1 var(--display); }
+  .fixture .meta { margin-left: auto; color: var(--mist); font-size: 14px; text-align: right; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--rule); }
+  th { color: var(--mist); font-size: 13px; font-weight: 600; }
+  td { font-size: 15px; }
+  td.num { font: 700 20px/1 var(--display); }
+  tr.ours td { color: var(--lamp); }
+  tr.ours td:first-child { font-weight: 700; }
+  .note { color: var(--dim); font-size: 12.5px; max-width: 110ch; }
+  @media (prefers-reduced-motion: reduce) { .bug .bar i { transition: none; } }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <header>
+    <div class="brand">
+      <div class="mono" aria-hidden="true">404</div>
+      <div>
+        <h1>Who has the ball?</h1>
+        <p id="subtitle"></p>
+      </div>
+    </div>
+    <div class="bug" aria-label="Live possession">
+      <div class="poss">
+        <div class="side h" id="pH">–</div>
+        <div class="bars">
+          <div class="bar"><i id="barModel" style="width:50%"></i></div>
+          <div class="bar truth"><i id="barTruth" style="width:50%"></i></div>
+          <div class="cap">Possession so far · model (top) and truth</div>
+        </div>
+        <div class="side a" id="pA">–</div>
+      </div>
+    </div>
+    <div class="switch" role="tablist">
+      <button class="on" data-s="s1" role="tab">Live replay</button>
+      <button data-s="s2" id="tab2" role="tab">The challenge match</button>
+    </div>
+  </header>
+
+  <section class="scene on" id="s1">
+    <div class="panel" id="pitchPanel">
+      <div class="cbox"><canvas id="pitch" aria-label="Pitch with players and ball"></canvas></div>
+      <div class="strip">
+        <span class="key"><i style="background:var(--home)"></i>Home</span>
+        <span class="key"><i style="background:var(--away)"></i>Away</span>
+        <span class="key"><i style="background:#fff"></i><span id="ballState">Ball</span></span>
+        <div class="now">
+          <span class="tag">Truth <span class="lab" id="nowTruth">–</span></span>
+          <span class="tag ours">Our model <span class="lab" id="nowOurs">–</span></span>
+          <span class="tag">Baseline <span class="lab" id="nowBase">–</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="side">
+      <div class="panel">
+        <h2><b>spellF1</b> so far, official scorer</h2>
+        <div class="score">
+          <div class="ours"><div class="who">Our model</div><div class="v" id="spO">–</div><div class="s" id="ssO"></div></div>
+          <div class="base"><div class="who">Official baseline</div><div class="v" id="spB">–</div><div class="s" id="ssB"></div></div>
+        </div>
+        <div class="delta" id="delta">Scores appear after the first 5 seconds.</div>
+      </div>
+      <div class="panel">
+        <h2><b>Who the model thinks has the ball</b>, last 30 seconds</h2>
+        <div class="cbox" style="height:96px"><canvas id="proba"></canvas></div>
+        <div class="ribbonKey">
+          <span><i style="background:var(--home)"></i>Home</span>
+          <span><i style="background:var(--away)"></i>Away</span>
+          <span><i style="background:var(--dead)"></i>Dead ball</span>
+          <span><i style="background:var(--lamp);border-radius:50%"></i>Touch</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2><b>What is happening</b></h2>
+        <div id="caption"></div>
+        <div class="source" id="source"></div>
+      </div>
+    </div>
+
+    <div id="bottom">
+      <div class="panel transport">
+        <div class="time"><span id="clock">00:00</span><span id="total"></span></div>
+        <button id="play" aria-label="Play or pause"></button>
+        <div class="speeds" id="speeds" aria-label="Playback speed"></div>
+      </div>
+      <div class="panel" style="padding:14px 18px 10px">
+        <div class="cbox" style="height:100%"><canvas id="timeline" aria-label="Possession timeline"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="scene" id="s2">
+    <div class="panel">
+      <div class="fixture">
+        <span class="club"><span class="kit barca" aria-hidden="true"></span>FC Barcelona</span>
+        <span class="vs">vs</span>
+        <span class="club"><span class="kit athletic" aria-hidden="true"></span>Athletic Club</span>
+        <span class="meta">LaLiga, 24 August 2024 · first 5 minutes, the only public ground truth<br>Challenge by Barça Innovation Hub, Mobile World Capital Barcelona and Metrica Sports</span>
+      </div>
+      <div class="cbox" style="height:178px"><canvas id="tl2" aria-label="Possession timelines for the public window"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2><b>Official scorer</b> on the public window</h2>
+      <table id="board"></table>
+    </div>
+    <div class="note" id="note2"></div>
+  </section>
+</div></div>
+
+<script>
+const DATA=/*__DATA__*/null;
+const R = DATA.replay, CH = DATA.challenge;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COL = { H: css('--home'), A: css('--away'), D: css('--dead'), X: '#26302b' };
+const COL2 = { H: css('--barca'), A: css('--athletic'), D: css('--dead'), X: '#26302b' };
+const DISPLAY = css('--display'), BODY = css('--body');
+document.getElementById('subtitle').textContent = DATA.team_name + ' · More than a Hack 2027';
+document.getElementById('source').textContent = 'Replay: ' + R.source + ' Model trained without this match.';
+
+/* ---------- fit the 1600x900 stage to the window ---------- */
+let SCALE = 1;
+function fit() { SCALE = Math.min(innerWidth / 1600, innerHeight / 900);
+  document.getElementById('stage').style.transform = 'scale(' + SCALE + ')'; }
+addEventListener('resize', fit); fit();
+
+/* ---------- scene switch ---------- */
+const tabs = document.querySelectorAll('.switch button');
+tabs.forEach(b => b.onclick = () => {
+  tabs.forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.scene').forEach(x => x.classList.toggle('on', x.id === b.dataset.s));
+  document.querySelector('.bug').style.visibility = b.dataset.s === 's1' ? 'visible' : 'hidden';
+  if (b.dataset.s === 's2') drawScene2();
+});
+if (!CH) { const t = document.getElementById('tab2'); t.disabled = true; t.title = 'Run python -m src.make_submission, then python -m bench.demo'; }
+
+/* ---------- canvas helper: size from the layout box, sharp on Retina ---------- */
+function setup(cv) {
+  const box = cv.parentElement, w = box.clientWidth, h = box.clientHeight;
+  const d = (devicePixelRatio || 1) * SCALE;
+  const W = Math.max(1, Math.round(w * d)), H = Math.max(1, Math.round(h * d));
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+  return [g, w, h];
+}
+function rrect(g, x, y, w, h, r) { w = Math.max(0, w); h = Math.max(0, h); r = Math.max(0, Math.min(r, w / 2, h / 2)); g.beginPath(); g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+/* ---------- playback state ---------- */
+const N = R.n, FPS = R.fps;
+let pos = 0, f = 0, playing = false, speed = 4, last = null;   // pos: exact position, f: frame shown
+const PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 1.5v13l11-6.5z"/></svg>PLAY';
+const PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 1.5h3.5v13H3zM9.5 1.5H13v13H9.5z"/></svg>PAUSE';
+const playBtn = document.getElementById('play'); playBtn.innerHTML = PLAY;
+function setPlaying(v) { playing = v; playBtn.innerHTML = v ? PAUSE : PLAY; last = null; }
+playBtn.onclick = () => { if (!playing && f >= N - 1) { pos = 0; f = 0; } setPlaying(!playing); };
+addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); playBtn.onclick(); } });
+const sp = document.getElementById('speeds');
+[1, 2, 4, 8, 16].forEach(v => { const b = document.createElement('button'); b.textContent = v + '×';
+  if (v === speed) b.className = 'on';
+  b.onclick = () => { speed = v; [...sp.children].forEach(x => x.classList.toggle('on', x === b)); };
+  sp.appendChild(b); });
+
+function labelAt(s, t) { let lo = 0, hi = s.length - 1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (t < s[m][0]) hi = m - 1; else if (t >= s[m][1]) lo = m + 1; else return s[m][2]; }
+  return 'X'; }
+const mmss = fr => { const s = Math.floor(fr / FPS); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+function share(spans, t) { let h = 0, a = 0;   // home share of the live time in [0, t)
+  for (const [s, e, l] of spans) { if (s >= t) break; const d = Math.min(e, t) - s; if (l === 'H') h += d; else if (l === 'A') a += d; }
+  return h + a ? h / (h + a) : null; }
+
+/* ---------- pitch ---------- */
+const pitchCv = document.getElementById('pitch');
+const [L, W] = R.pitch;
+function drawPitch() {
+  const [g, w, h] = setup(pitchCv);
+  const pad = 26, sc = Math.min((w - 2 * pad) / L, (h - 2 * pad) / W);
+  if (!(sc > 0)) return false;
+  const ox = (w - L * sc) / 2, oy = (h - W * sc) / 2, X = x => ox + x * sc, Y = y => oy + y * sc;
+  // grass with mowing stripes and a floodlight vignette
+  g.fillStyle = css('--grass1'); g.fillRect(0, 0, w, h);
+  const stripes = 14; for (let i = 0; i < stripes; i++) if (i % 2) { g.fillStyle = css('--grass2'); g.fillRect(X(i * L / stripes), 0, L / stripes * sc, h); }
+  const vg = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * .2, w / 2, h / 2, Math.max(w, h) * .75);
+  vg.addColorStop(0, 'rgba(255,255,230,.05)'); vg.addColorStop(1, 'rgba(0,0,0,.42)'); g.fillStyle = vg; g.fillRect(0, 0, w, h);
+  // markings
+  g.strokeStyle = css('--chalkline'); g.fillStyle = css('--chalkline'); g.lineWidth = 1.6;
+  g.strokeRect(X(0), Y(0), L * sc, W * sc);
+  g.beginPath(); g.moveTo(X(L / 2), Y(0)); g.lineTo(X(L / 2), Y(W)); g.stroke();
+  g.beginPath(); g.arc(X(L / 2), Y(W / 2), 9.15 * sc, 0, 7); g.stroke();
+  g.beginPath(); g.arc(X(L / 2), Y(W / 2), 2.2, 0, 7); g.fill();
+  for (const s of [0, 1]) {
+    const gx = s ? L : 0, dir = s ? -1 : 1;
+    g.strokeRect(X(s ? L - 16.5 : 0), Y(W / 2 - 20.16), 16.5 * sc, 40.32 * sc);
+    g.strokeRect(X(s ? L - 5.5 : 0), Y(W / 2 - 9.16), 5.5 * sc, 18.32 * sc);
+    g.beginPath(); g.arc(X(gx + dir * 11), Y(W / 2), 2.2, 0, 7); g.fill();
+    const a0 = Math.acos(5.5 / 9.15);
+    g.beginPath(); g.arc(X(gx + dir * 11), Y(W / 2), 9.15 * sc, s ? Math.PI - a0 : -a0, s ? Math.PI + a0 : a0); g.stroke();
+    g.strokeRect(X(s ? L : -1.5), Y(W / 2 - 3.66), 1.5 * sc, 7.32 * sc);
+    for (const cy of [0, W]) { g.beginPath(); g.arc(X(gx), Y(cy), 1 * sc, 0, 7); g.stroke(); }
+  }
+  const i = Math.floor(f / R.step), owner = labelAt(R.ours, f);
+  // players: short trail of the last 0.6 s, team in possession outlined
+  const back = Math.max(0, i - Math.round(15 / R.step));
+  R.players.forEach((p, k) => {
+    const x = p[0][i], y = p[1][i]; if (x === null || y === null) return;
+    const home = R.team[k] > 0, c = home ? COL.H : COL.A;
+    const px = p[0][back], py = p[1][back];
+    if (px !== null && py !== null) { g.strokeStyle = c; g.globalAlpha = .35; g.lineWidth = 3; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(X(px), Y(py)); g.lineTo(X(x), Y(y)); g.stroke(); g.globalAlpha = 1; }
+    const inPoss = (owner === 'H' && home) || (owner === 'A' && !home);
+    g.fillStyle = c; g.beginPath(); g.arc(X(x), Y(y), 8, 0, 7); g.fill();
+    g.lineWidth = inPoss ? 2.4 : 1.4; g.strokeStyle = inPoss ? 'rgba(255,255,255,.95)' : 'rgba(0,0,0,.5)'; g.stroke();
+  });
+  // ball: last known position faded when the tracker has lost it
+  let bx = R.ball[0][i], by = R.ball[1][i], lost = false;
+  if (bx === null) { lost = true; for (let j = i; j >= 0 && j > i - 250; j--) if (R.ball[0][j] !== null) { bx = R.ball[0][j]; by = R.ball[1][j]; break; } }
+  if (bx !== null && bx !== undefined) {
+    if (!lost) { g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(X(bx) + 2, Y(by) + 3, 6, 3.5, 0, 0, 7); g.fill(); }
+    g.fillStyle = lost ? 'rgba(255,255,255,.22)' : '#fff'; g.beginPath(); g.arc(X(bx), Y(by), lost ? 6.5 : 5.5, 0, 7); g.fill();
+    if (lost) { g.setLineDash([3, 4]); g.strokeStyle = 'rgba(255,255,255,.65)'; g.lineWidth = 1.4;
+      g.beginPath(); g.arc(X(bx), Y(by), 12, 0, 7); g.stroke(); g.setLineDash([]); }
+    for (const [tf] of R.touches) if (f >= tf && f < tf + 14) {
+      g.strokeStyle = css('--lamp'); g.globalAlpha = 1 - (f - tf) / 14; g.lineWidth = 3;
+      g.beginPath(); g.arc(X(bx), Y(by), 10 + 1.6 * (f - tf), 0, 7); g.stroke(); g.globalAlpha = 1; }
+  }
+  // on-pitch banner, broadcast style
+  const label = { H: 'Home in possession', A: 'Away in possession', D: 'Dead ball', X: '' }[owner];
+  if (label) { g.font = '700 18px ' + DISPLAY; const tw = g.measureText(label.toUpperCase()).width;
+    rrect(g, 16, 14, tw + 52, 34, 6); g.fillStyle = 'rgba(8,14,11,.78)'; g.fill();
+    g.fillStyle = COL[owner]; rrect(g, 16, 14, 8, 34, 3); g.fill();
+    g.fillStyle = css('--lamp'); g.font = '700 11px ' + BODY; g.fillText('MODEL', 34, 27);
+    g.fillStyle = '#fff'; g.font = '700 18px ' + DISPLAY; g.fillText(label.toUpperCase(), 34, 43); }
+  document.getElementById('ballState').textContent = lost ? 'Ball, not tracked now' : 'Ball';
+  return lost;
+}
+
+/* ---------- probabilities: one line per outcome, values labelled at the right edge ---------- */
+const probaCv = document.getElementById('proba');
+function drawProba() {
+  const [g, w, h] = setup(probaCv);
+  const right = 44, top = 6, bot = 8, cw = w - right;
+  const win = 30 * FPS, st = R.proba_step, a = Math.max(0, f - win);
+  const X = t => (t - (f - win)) / win * cw, Y = p => top + (1 - p) * (h - top - bot);
+  g.clearRect(0, 0, w, h);
+  // gridlines at 0, 50 and 100 %
+  g.font = '600 11px ' + BODY; g.textBaseline = 'middle';
+  [[1, '100%'], [.5, '50%'], [0, '0%']].forEach(([p, t]) => {
+    g.strokeStyle = p === .5 ? 'rgba(238,243,239,.16)' : 'rgba(238,243,239,.08)'; g.lineWidth = 1;
+    g.setLineDash(p === .5 ? [3, 4] : []); g.beginPath(); g.moveTo(0, Y(p)); g.lineTo(cw, Y(p)); g.stroke(); g.setLineDash([]);
+  });
+  // touches along the bottom
+  for (const [tf] of R.touches) if (tf >= a && tf <= f) { g.fillStyle = css('--lamp'); g.beginPath(); g.arc(X(tf), h - 3, 2.6, 0, 7); g.fill(); }
+  const pts = []; for (let t = Math.floor(a / st) * st; t <= f; t += st) { const k = t / st; if (R.proba[0][k] !== undefined) pts.push([t, k]); }
+  const ends = [];
+  [[2, COL.D, 1.6, [4, 3]], [1, COL.A, 2.4, []], [0, COL.H, 2.4, []]].forEach(([j, c, lw, dash]) => {
+    if (pts.length < 2) return;
+    g.strokeStyle = c; g.lineWidth = lw; g.lineJoin = 'round'; g.lineCap = 'round'; g.setLineDash(dash);
+    g.beginPath(); pts.forEach(([t, k], n) => { const x = X(t), y = Y(R.proba[j][k]); n ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]);
+    const [tl, kl] = pts[pts.length - 1], v = R.proba[j][kl];
+    g.fillStyle = c; g.beginPath(); g.arc(X(tl), Y(v), 3.6, 0, 7); g.fill();
+    ends.push([Y(v), Math.round(v * 100) + '%', c]);
+  });
+  // value labels at the right edge, pushed apart so they never overlap
+  ends.sort((p, q) => p[0] - q[0]);
+  for (let i = 1; i < ends.length; i++) if (ends[i][0] - ends[i - 1][0] < 13) ends[i][0] = ends[i - 1][0] + 13;
+  const over = ends.length ? Math.max(0, ends[ends.length - 1][0] - (h - 6)) : 0;
+  g.font = '700 13px ' + DISPLAY; g.textAlign = 'left';
+  ends.forEach(([y, t, c]) => { g.fillStyle = c; g.fillText(t, cw + 8, y - over); });
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+}
+
+/* ---------- timeline ---------- */
+const tlCv = document.getElementById('timeline');
+const TL_LEFT = 104;
+function drawTimeline() {
+  const [g, w, h] = setup(tlCv);
+  const rows = [['Truth', R.truth], ['Our model', R.ours], ['Baseline', R.baseline]];
+  const rh = 24, gap = 10, top = 4, X = t => TL_LEFT + t / N * (w - TL_LEFT - 6);
+  g.clearRect(0, 0, w, h);
+  rows.forEach(([name, spn], r) => {
+    const y = top + r * (rh + gap);
+    g.fillStyle = r === 1 ? css('--lamp') : css('--mist'); g.font = '700 16px ' + DISPLAY; g.fillText(name.toUpperCase(), 0, y + 17);
+    rrect(g, TL_LEFT, y, w - TL_LEFT - 6, rh, 5); g.fillStyle = css('--surface2'); g.fill();
+    g.save(); rrect(g, TL_LEFT, y, w - TL_LEFT - 6, rh, 5); g.clip();
+    for (const [s, e, l] of spn) { if (s >= f) break; g.fillStyle = COL[l]; g.fillRect(X(s), y, Math.max(1, X(Math.min(e, f)) - X(s)) + .5, rh); }
+    g.restore();
+  });
+  const yb = top + 3 * (rh + gap) + 2;
+  g.fillStyle = css('--dim'); g.font = '600 12px ' + BODY;
+  for (let m = 0; m * 60 * FPS <= N; m++) { const x = X(m * 60 * FPS); g.fillRect(x, yb - 2, 1, 5); g.textAlign = m ? 'center' : 'left'; g.fillText(m + "'", x, yb + 15); }
+  g.textAlign = 'left';
+  const xp = X(f); g.fillStyle = '#fff'; g.fillRect(xp - 1, 0, 2, yb - 2);
+  g.beginPath(); g.moveTo(xp - 5, 0); g.lineTo(xp + 5, 0); g.lineTo(xp, 6); g.fill();
+}
+tlCv.onclick = e => { const r = tlCv.getBoundingClientRect(), k = r.width / tlCv.parentElement.clientWidth;
+  const x = (e.clientX - r.left) / k, w = tlCv.parentElement.clientWidth;
+  pos = Math.max(0, Math.min(N - 1, (x - TL_LEFT) / (w - TL_LEFT - 6) * N)); f = Math.floor(pos); render(); };
+
+/* ---------- numbers and captions ---------- */
+function metricsAt() { const M = R.metrics; let k = -1; for (let i = 0; i < M.t.length; i++) if (M.t[i] <= f) k = i;
+  return k < 0 ? null : { o: M.ours[k], b: M.baseline[k] }; }
+let lastSwitch = -1e9, prevOwner = null;
+function caption(lost) {
+  const o = labelAt(R.ours, f);
+  if (prevOwner && prevOwner !== o && 'HA'.includes(prevOwner) && 'HA'.includes(o)) lastSwitch = f;
+  prevOwner = o;
+  const touch = R.touches.find(([tf]) => f >= tf && f < tf + 25);
+  let msg;
+  if (f >= lastSwitch && f - lastSwitch < 50) msg = '<strong>Possession changes hands.</strong> Switching teams has a cost in the decoder, so it only happens when the evidence is sustained. A single touch is not control.';
+  else if (o === 'D') msg = '<strong>Dead ball.</strong> Players slow down and the ball stops or leaves the pitch. The model holds the stoppage until the restart.';
+  else if (lost) msg = '<strong>The tracker has lost the ball.</strong> That happens on about 41% of the frames. The model keeps deciding from the shape and movement of both teams.';
+  else if (touch) msg = '<strong>Touch detected:</strong> a sharp change in the ball\'s velocity next to a ' + (touch[1] > 0 ? 'home' : touch[1] < 0 ? 'away' : '') + ' player. Touches inform the model; on their own they do not change possession.';
+  else msg = '<strong>Open play.</strong> 107 measurements per frame (distances, relative speeds, team shape, touches) become probabilities, and a Viterbi decoder turns them into whole possessions.';
+  document.getElementById('caption').innerHTML = msg;
+  return o;
+}
+function setLab(id, l) { const e = document.getElementById(id); e.className = 'lab ' + l; e.textContent = { H: 'HOME', A: 'AWAY', D: 'DEAD', X: '—' }[l]; }
+
+function render() {
+  const lost = drawPitch(); drawProba(); drawTimeline();
+  const o = caption(lost);
+  setLab('nowTruth', labelAt(R.truth, f)); setLab('nowOurs', o); setLab('nowBase', labelAt(R.baseline, f));
+  document.getElementById('clock').textContent = mmss(f);
+  document.getElementById('total').textContent = '/ ' + mmss(N);
+  const sm = share(R.ours, f + 1), st = share(R.truth, f + 1);
+  document.getElementById('pH').textContent = sm === null ? '–' : Math.round(sm * 100) + '%';
+  document.getElementById('pA').textContent = sm === null ? '–' : Math.round((1 - sm) * 100) + '%';
+  document.getElementById('barModel').style.width = (sm === null ? 50 : sm * 100) + '%';
+  document.getElementById('barTruth').style.width = (st === null ? 50 : st * 100) + '%';
+  const m = metricsAt();
+  if (m) {
+    document.getElementById('spO').textContent = m.o[0].toFixed(2);
+    document.getElementById('spB').textContent = m.b[0].toFixed(2);
+    document.getElementById('ssO').textContent = 'macroF1 ' + m.o[1].toFixed(2) + ' · ' + m.o[2] + ' of ' + m.o[3] + ' possessions found';
+    document.getElementById('ssB').textContent = 'macroF1 ' + m.b[1].toFixed(2) + ' · ' + m.b[2] + ' predicted for ' + m.b[3];
+    const d = m.o[0] - m.b[0];
+    document.getElementById('delta').innerHTML = 'Our model is <b>' + (d >= 0 ? '+' : '') + d.toFixed(2) + '</b> above the baseline on the minutes played so far.';
+  } else { ['spO', 'spB'].forEach(id => document.getElementById(id).textContent = '–');
+    ['ssO', 'ssB'].forEach(id => document.getElementById(id).textContent = '');
+    document.getElementById('delta').textContent = 'Scores appear after the first 5 seconds.'; }
+}
+function loop(ts) {
+  if (playing) {
+    if (last !== null) pos = Math.min(N - 1, pos + (ts - last) / 1000 * FPS * speed);
+    last = ts;
+    if (pos >= N - 1) setPlaying(false);
+  }
+  const nf = Math.floor(pos);
+  if (nf !== f || !drawn) { f = nf; render(); drawn = true; }
+  requestAnimationFrame(loop);
+}
+let drawn = false;
+addEventListener('resize', () => { drawn = false; if (document.getElementById('s2').classList.contains('on')) drawScene2(); });
+requestAnimationFrame(loop);
+
+/* ---------- scene 2: labels and scores only ---------- */
+function drawScene2() {
+  if (!CH) return;
+  const cv = document.getElementById('tl2'); const [g, w, h] = setup(cv);
+  const left = 190, rh = 32, gap = 14, X = t => left + t / CH.n * (w - left - 6);
+  g.clearRect(0, 0, w, h);
+  CH.tracks.forEach((tr, r) => {
+    const y = 4 + r * (rh + gap), ours = tr.name.startsWith('Our');
+    g.fillStyle = ours ? css('--lamp') : css('--mist'); g.font = '700 17px ' + DISPLAY;
+    g.fillText((tr.name.startsWith('Ground') ? 'Public truth' : ours ? 'Our model' : 'Baseline ±2 s').toUpperCase(), 0, y + 22);
+    g.save(); rrect(g, left, y, w - left - 6, rh, 6); g.clip();
+    for (const [s, e, l] of tr.spans) { g.fillStyle = COL2[l]; g.fillRect(X(s), y, X(e) - X(s) + .5, rh); }
+    g.restore();
+  });
+  const yb = 4 + CH.tracks.length * (rh + gap);
+  g.fillStyle = css('--dim'); g.font = '600 12px ' + BODY;
+  for (let m = 0; m <= 5; m++) { const x = X(m * 60 * 25); g.fillRect(x, yb - 4, 1, 5);
+    g.textAlign = m === 0 ? 'left' : m === 5 ? 'right' : 'center'; g.fillText(m + ':00', x, yb + 14); }
+  g.textAlign = 'left';
+  g.font = '600 13px ' + BODY; let lx = left;
+  [['FC Barcelona', COL2.H], ['Athletic Club', COL2.A], ['Dead ball', COL2.D]].forEach(([t, c]) => {
+    g.fillStyle = c; rrect(g, lx, yb + 26, 11, 11, 2); g.fill(); g.fillStyle = css('--mist'); g.fillText(t, lx + 17, yb + 36);
+    lx += g.measureText(t).width + 40; });
+  const nice = n => n.startsWith('Our') ? 'Our model (submitted)' : n.replace('baseline_raw', 'Baseline, no smoothing').replace(/baseline_smooth(\d+)/, (_, k) => 'Baseline, ±' + (k / 25).toFixed(k % 25 ? 1 : 0) + ' s vote');
+  document.getElementById('board').innerHTML =
+    '<tr><th>Method</th><th>spellF1 (ranking metric)</th><th>macroF1</th><th>Possessions (truth: 17)</th><th>Mean duration, s (truth: 14.2)</th></tr>' +
+    CH.rows.map(r => '<tr class="' + (r.name.startsWith('Our') ? 'ours' : '') + '"><td>' + nice(r.name) + '</td><td class="num">' + r.spell.toFixed(3) +
+      '</td><td class="num">' + r.macro.toFixed(3) + '</td><td class="num">' + r.poss + '</td><td class="num">' + r.dur.toFixed(1) + '</td></tr>').join('');
+  document.getElementById('note2').textContent = CH.note;
+}
+</script>
+</body>
+</html>
