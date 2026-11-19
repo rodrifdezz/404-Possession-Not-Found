@@ -105,6 +105,13 @@ Each external match is degraded to resemble the provided automatic tracking, usi
 figures published in DATA.md (`bench/degrade.py`), run through the same pipeline as the
 submission (`src/pipeline.py`) and scored with the official scoring code.
 
+## Demo
+
+`python -m bench.demo` writes `outputs/demo/possession_demo.html`, a self-contained page that
+replays a public match (Metrica sample data) with the model running live and scored by the
+official code, plus the public window of the challenge (labels and scores only). It is safe to
+record and publish: see [`docs/DEMO.md`](docs/DEMO.md).
+
 ## Synthetic data
 
 `tools/make_fake_data.py` writes a simulated match in the same file formats plus its ground truth,
@@ -126,7 +133,7 @@ python -m src.evaluate --gt fake_data/fake_gt.csv
 | `models/` | fitted models (`.pkl`) and their descriptions (`.json`): `possession_v4c` (submitted), `possession_hgb` (v3) |
 | `bench/` | external data readers, degradation, validation and fitting |
 | `tests/` | unit and integration tests on synthetic data |
-| `docs/` | technical document, bench reports, experiment journal, team guide |
+| `docs/` | technical document, bench reports, experiment journal |
 
 ## Data
 
